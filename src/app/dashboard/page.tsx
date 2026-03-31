@@ -1,0 +1,173 @@
+"use client";
+
+import { useState, useMemo } from "react";
+import { motion } from "framer-motion";
+import { useRouter, useSearchParams } from "next/navigation";
+import { ProjectCard } from "@/components/ProjectCard";
+import { projects as allProjects } from "@/lib/mockData";
+import {
+  Search, ArrowRight, Briefcase
+} from "lucide-react";
+
+export default function DashboardPage() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const view = searchParams.get("view") ?? "all";
+  const [searchQuery, setSearchQuery] = useState("");
+
+  const filteredProjects = useMemo(() => {
+    return allProjects.filter((project) => {
+      const matchesSearch =
+        project.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        project.techStack.some(tech => tech.toLowerCase().includes(searchQuery.toLowerCase()));
+
+      if (view === "owned") return matchesSearch && project.ownerId === "user_1";
+      if (view === "work") return matchesSearch && project.assignedFreelancerId === "user_1";
+      return matchesSearch;
+    });
+  }, [searchQuery, view]);
+
+  const containerVariants = {
+    hidden: { opacity: 0 },
+    show: { opacity: 1, transition: { staggerChildren: 0.1 } },
+  };
+
+  const itemVariants = {
+    hidden: { opacity: 0, scale: 0.98 },
+    show: { opacity: 1, scale: 1 },
+  };
+
+  const handleViewDetails = (id: string) => {
+    if (view === "owned") router.push(`/dashboard/owned/${id}`);
+    else if (view === "work") router.push(`/dashboard/work/${id}`);
+    else router.push(`/dashboard/projects/${id}`);
+  };
+
+  return (
+    <motion.div
+      key={view}
+      initial={false}
+      animate={{ opacity: 1, scale: 1 }}
+      exit={{ opacity: 0, scale: 0.98 }}
+      transition={{ duration: 0.3 }}
+      className="space-y-8"
+    >
+      {/* Header */}
+      {view === "all" && (
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h1 className="text-3xl font-black tracking-tight text-slate-900 sm:text-4xl">
+              Explore Projects
+            </h1>
+            <p className="mt-2 text-sm font-medium text-slate-500">
+              Browse and bid on the most innovative Web3 and AI projects.
+            </p>
+          </div>
+          <div className="flex items-center gap-3">
+            <span className="text-xs font-bold text-slate-400">
+              Showing <span className="text-slate-900 font-black">{filteredProjects.length}</span> projects
+            </span>
+          </div>
+        </div>
+      )}
+
+      {view === "owned" && (
+        <div>
+          <h1 className="text-3xl font-black tracking-tight text-slate-900 sm:text-4xl">
+            Your Projects
+          </h1>
+          <p className="mt-2 text-sm font-medium text-slate-500">
+            Manage and track the projects you have posted on the platform.
+          </p>
+        </div>
+      )}
+
+      {view === "work" && (
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
+          <div className="space-y-2">
+            <h1 className="text-4xl font-black tracking-tight text-slate-900 leading-tight">
+              Your Active Workspace
+            </h1>
+            <p className="text-lg font-medium text-slate-500">
+              Track your progress, submit milestones, and manage active contracts.
+            </p>
+          </div>
+          <button
+            onClick={() => router.push("/dashboard")}
+            className="px-8 h-14 rounded-2xl bg-indigo-500 text-white font-extrabold shadow-xl hover:bg-indigo-600 hover:scale-[1.02] active:scale-95 transition-all flex items-center gap-3 whitespace-nowrap"
+          >
+            Explore New Projects
+            <ArrowRight className="h-4 w-4" />
+          </button>
+        </div>
+      )}
+
+      {/* Search (for all/owned/work list) */}
+      {view !== "work" && (
+        <div className="relative w-full max-w-md">
+          <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+          <input
+            type="search"
+            value={searchQuery}
+            onChange={e => setSearchQuery(e.target.value)}
+            placeholder="Search projects or tech..."
+            className="w-full rounded-2xl border border-slate-200 bg-white pl-11 pr-4 h-12 text-sm font-black text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-indigo-400 focus:ring-4 focus:ring-indigo-50 shadow-sm"
+          />
+        </div>
+      )}
+
+      {/* Grid */}
+      {filteredProjects.length > 0 ? (
+        <motion.div
+          variants={containerVariants}
+          initial={false}
+          animate="show"
+          className="grid grid-cols-1 gap-6 sm:grid-cols-2 xl:grid-cols-3 relative z-10"
+        >
+          {filteredProjects.map((project) => (
+            <motion.div key={project.id} variants={itemVariants}>
+              <ProjectCard
+                project={project}
+                onViewDetails={handleViewDetails}
+              />
+            </motion.div>
+          ))}
+        </motion.div>
+      ) : (
+        view === "work" ? (
+          <div className="rounded-[3rem] border-2 border-dashed border-slate-200 bg-white/40 p-16 flex flex-col items-center justify-center text-center space-y-6 shadow-sm">
+            <div className="h-24 w-24 rounded-[2.5rem] bg-indigo-50 flex items-center justify-center text-indigo-500 shadow-xl shadow-indigo-100">
+              <Briefcase className="h-12 w-12" />
+            </div>
+            <h3 className="text-3xl font-black text-slate-900 leading-tight">No Active Projects Yet</h3>
+            <p className="text-lg font-bold text-slate-500 max-w-lg">
+              You haven&apos;t been assigned any projects yet. Explore the marketplace and submit a proposal!
+            </p>
+            <button
+              onClick={() => router.push("/dashboard")}
+              className="mt-4 px-10 h-16 rounded-2xl bg-slate-900 text-white font-extrabold shadow-xl hover:scale-105 active:scale-95 transition-all outline-none"
+            >
+              Find Your First Project
+            </button>
+          </div>
+        ) : (
+          <div className="col-span-full flex flex-col items-center justify-center rounded-[3rem] border-2 border-dashed border-slate-200 bg-white/50 py-20 text-center">
+            <div className="mb-6 flex h-16 w-16 items-center justify-center rounded-3xl bg-slate-50 text-slate-300 shadow-inner">
+              <Search className="h-8 w-8" />
+            </div>
+            <h3 className="text-lg font-black text-slate-900">No projects found</h3>
+            <p className="mt-2 text-sm font-medium text-slate-500">
+              Try adjusting your search or filters.
+            </p>
+            <button
+              onClick={() => setSearchQuery("")}
+              className="mt-6 rounded-full bg-slate-900 px-6 py-2.5 text-xs font-black text-white shadow-xl shadow-slate-200 transition-all hover:scale-105 active:scale-95"
+            >
+              Clear Search
+            </button>
+          </div>
+        )
+      )}
+    </motion.div>
+  );
+}
