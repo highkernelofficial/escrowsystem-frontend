@@ -1,16 +1,26 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { Compass, Rocket, Layers, Wallet, LogOut, Hexagon, Sparkle, FolderHeart } from "lucide-react";
+import { Compass, Rocket, Layers, Hexagon, Sparkle, FolderHeart, LogOut } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
+import { useWalletAuth } from "@/hooks/useWalletAuth";
+import { WalletButton } from "./WalletButton";
 
 export function DashboardSidebar() {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const currentView = searchParams.get("view");
+  const { 
+    walletAddress, 
+    isConnected, 
+    isLoading, 
+    connectWallet, 
+    logout 
+  } = useWalletAuth();
 
+  // ... (navItems and isActive logic remain)
   const navItems = [
     { id: "all", label: "All Projects", href: "/dashboard", icon: Compass, activeBg: "bg-sky-50", activeText: "text-sky-600", activeShadow: "shadow-sky-100/50", activeRing: "ring-sky-100", activeDot: "bg-sky-500", activeIcon: "text-sky-500" },
     { id: "owned", label: "Owned Projects", href: "/dashboard?view=owned", icon: FolderHeart, activeBg: "bg-emerald-50", activeText: "text-emerald-600", activeShadow: "shadow-emerald-100/50", activeRing: "ring-emerald-100", activeDot: "bg-emerald-500", activeIcon: "text-emerald-500" },
@@ -31,8 +41,8 @@ export function DashboardSidebar() {
       <div className="flex h-full flex-col p-6">
         {/* Logo Section */}
         <div
-          className="mb-10 flex items-center gap-3 px-2 group cursor-pointer lg:hover:scale-105 transition-transform duration-300"
-          onClick={() => router.push("/dashboard")}
+          className="mb-10 flex items-center gap-3 px-2 group cursor-pointer lg:hover:scale-105 transition-all duration-300 hover:opacity-80"
+          onClick={() => router.push("/")}
         >
           <div className="relative flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-rose-400 via-violet-500 to-sky-500 text-white shadow-lg shadow-violet-500/30 overflow-hidden">
             <div className="absolute inset-0 bg-white/20 opacity-0 group-hover:opacity-100 transition-opacity" />
@@ -72,32 +82,26 @@ export function DashboardSidebar() {
           })}
         </nav>
 
-        {/* Bottom Section: Wallet / Account info */}
-        <div className="mt-auto space-y-4 pt-6 border-t border-slate-50">
-          <div className="rounded-3xl bg-slate-50/80 p-4 border border-slate-100">
-            <div className="flex items-center gap-3 mb-3">
-              <div className="relative h-10 w-10 rounded-full shadow-inner ring-2 ring-white overflow-hidden bg-slate-100">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src="/Samaksh.png" alt="User Profile" className="h-full w-full object-cover" />
-              </div>
-              <div className="overflow-hidden">
-                <p className="text-xs font-black text-slate-900 truncate">Samaksh Mandil</p>
-                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Pro Developer</p>
-              </div>
-            </div>
-            <div className="flex items-center gap-2 rounded-xl bg-white p-2.5 shadow-sm border border-slate-100">
-              <div className="flex h-6 w-6 items-center justify-center rounded-lg bg-sky-50 text-sky-500 ring-1 ring-sky-100">
-                <Wallet className="h-3.5 w-3.5" />
-              </div>
-              <span className="text-[11px] font-black text-slate-600">0x1A4...B62</span>
-              <div className="ml-auto h-2 w-2 rounded-full bg-emerald-500 animate-pulse shadow-[0_0_8px_rgba(16,185,129,0.8)]" />
-            </div>
-          </div>
+        {/* Bottom Section: Integrated Wallet Component */}
+        <div className="mt-auto space-y-3 pt-6 border-t border-slate-100/50">
+          {isConnected && (
+            <button
+              onClick={logout}
+              className="flex w-full items-center gap-3 rounded-2xl px-4 py-3 text-sm font-bold text-slate-500 transition-all hover:bg-rose-50 hover:text-rose-600 group"
+            >
+              <LogOut className="h-5 w-5 transition-transform group-hover:-translate-x-1" />
+              Sign Out
+            </button>
+          )}
 
-          <button className="flex w-full items-center gap-3 rounded-2xl px-4 py-3 text-sm font-bold text-slate-400 transition-all hover:bg-rose-50 hover:text-rose-600 group">
-            <LogOut className="h-5 w-5 transition-transform group-hover:-translate-x-1" />
-            Sign Out
-          </button>
+          <WalletButton 
+            isConnected={isConnected}
+            isLoading={isLoading && !isConnected}
+            walletAddress={walletAddress}
+            onConnect={connectWallet}
+            onLogout={logout}
+            className="w-full justify-center px-4 h-12"
+          />
         </div>
       </div>
     </aside>

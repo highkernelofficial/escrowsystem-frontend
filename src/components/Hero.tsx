@@ -3,8 +3,8 @@
 import { motion } from "framer-motion";
 import { ArrowRight, Play, ShieldCheck, CheckCircle2, Clock, Sparkles, Zap } from "lucide-react";
 import { cn } from "@/lib/utils";
-
 export function Hero() {
+
   const containerVariants = {
     hidden: { opacity: 0 },
     visible: {
@@ -83,25 +83,25 @@ export function Hero() {
               Eliminate trust issues. Our elite AI automatically validates project milestones and triggers instantaneous, secure decentralized payments.
             </motion.p>
 
-            <motion.div variants={itemVariants} className="mt-10 flex flex-col sm:flex-row gap-5 justify-center lg:justify-start">
+            <motion.div variants={itemVariants} className="mt-10 flex flex-wrap gap-5 justify-center lg:justify-start items-center">
               <a
                 href="/dashboard"
-                className="group relative inline-flex h-14 items-center justify-center overflow-hidden rounded-full bg-gradient-to-r from-sky-500 to-cyan-500 px-8 font-bold text-white transition-all hover:scale-110 shadow-[0_15px_30px_rgba(14,165,233,0.4)] hover:shadow-[0_20px_50px_rgba(14,165,233,0.6)] active:scale-95"
+                className="group relative inline-flex h-14 items-center justify-center overflow-hidden rounded-full bg-white/80 backdrop-blur-xl border border-sky-200 px-8 font-bold text-slate-700 transition-all hover:scale-105 hover:border-sky-300 shadow-[0_10px_25px_rgba(0,0,0,0.05)] hover:shadow-[0_15px_35px_rgba(14,165,233,0.2)] active:scale-95"
               >
-                <span className="absolute inset-0 w-full h-full bg-white/20 origin-left -scale-x-100 group-hover:scale-x-100 transition-transform duration-500 ease-out" />
-                <span className="relative flex items-center drop-shadow-md">
+                <span className="relative flex items-center drop-shadow-sm">
                   Explore Projects
-                  <ArrowRight className="ml-2 h-5 w-5 transition-transform group-hover:translate-x-1 drop-shadow-md" />
+                  <ArrowRight className="ml-2 h-5 w-5 transition-transform group-hover:translate-x-1" />
                 </span>
               </a>
+              
               <a
                 href="#team"
-                className="group inline-flex h-14 items-center justify-center gap-3 rounded-full border border-sky-200 bg-white/80 backdrop-blur-xl px-8 font-bold text-slate-700 transition-all hover:border-sky-300 hover:bg-white hover:text-sky-800 shadow-[0_10px_25px_rgba(0,0,0,0.05)] hover:shadow-[0_15px_35px_rgba(14,165,233,0.2)] active:scale-95"
+                className="group inline-flex h-14 items-center justify-center gap-3 rounded-full border border-slate-100 bg-transparent px-6 font-bold text-slate-500 transition-all hover:text-sky-600 active:scale-95"
               >
-                <div className="flex h-8 w-8 items-center justify-center rounded-full bg-white shadow-md shadow-sky-100 ring-1 ring-slate-100 transition-transform group-hover:scale-110 group-hover:bg-sky-50 group-hover:shadow-sky-200 group-hover:shadow-lg">
+                <div className="flex h-8 w-8 items-center justify-center rounded-full bg-white shadow-sm ring-1 ring-slate-100 transition-transform group-hover:scale-110 group-hover:bg-sky-50">
                   <Play className="h-4 w-4 text-sky-600 ml-0.5" />
                 </div>
-                <span className="drop-shadow-sm group-hover:drop-shadow-md">View Demo</span>
+                <span className="text-sm">View Demo</span>
               </a>
             </motion.div>
           </motion.div>

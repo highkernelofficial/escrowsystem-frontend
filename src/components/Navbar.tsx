@@ -4,13 +4,20 @@ import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Wallet, Menu, X, Hexagon, Sparkle } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useWalletAuth } from "@/hooks/useWalletAuth";
+import { WalletButton } from "./WalletButton";
 
 export function Navbar() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
-  const [walletConnected, setWalletConnected] = useState(false);
-
-  // Mock wallet address for demonstration purposes
-  const mockWalletAddress = "0x1A4...B62";
+  const { 
+    walletAddress, 
+    isConnected, 
+    isLoggedIn, 
+    isLoading, 
+    connectWallet, 
+    login, 
+    logout 
+  } = useWalletAuth();
 
   return (
     <motion.header
@@ -49,37 +56,14 @@ export function Navbar() {
           ))}
         </nav>
 
-        {/* Connect Wallet Button */}
-        <div className="hidden md:flex items-center">
-          <motion.button
-            whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.95 }}
-            onClick={() => setWalletConnected(!walletConnected)}
-            className={cn(
-              "group relative inline-flex items-center justify-center gap-2 overflow-hidden rounded-full px-6 py-2.5 text-sm font-bold transition-all duration-300",
-              walletConnected
-                ? "bg-white text-slate-800 border-2 border-slate-200 hover:border-sky-300 hover:bg-sky-50 shadow-md hover:shadow-xl hover:shadow-sky-200/50"
-                : "bg-gradient-to-r from-cyan-500 to-sky-600 text-white shadow-xl shadow-sky-500/40 ring-2 ring-transparent hover:ring-sky-200 hover:shadow-2xl hover:shadow-cyan-500/50"
-            )}
-          >
-            {!walletConnected && (
-              <span className="absolute inset-0 w-full h-full bg-white/25 origin-left -scale-x-100 group-hover:scale-x-100 transition-transform duration-500 ease-out" />
-            )}
-            {walletConnected ? (
-              <>
-                <div className="relative flex h-2.5 w-2.5">
-                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75 shadow-[0_0_10px_rgba(52,211,153,0.8)]"></span>
-                  <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-emerald-500 shadow-[0_0_5px_rgba(52,211,153,1)]"></span>
-                </div>
-                {mockWalletAddress}
-              </>
-            ) : (
-              <>
-                <Wallet className="h-4 w-4 relative z-10 drop-shadow-md" />
-                <span className="relative z-10 drop-shadow-md">Connect Wallet</span>
-              </>
-            )}
-          </motion.button>
+        <div className="hidden md:flex items-center gap-4">
+          <WalletButton 
+            isConnected={isConnected}
+            isLoading={isLoading && !isConnected}
+            walletAddress={walletAddress}
+            onConnect={connectWallet}
+            onLogout={logout}
+          />
         </div>
 
         {/* Mobile menu button */}
@@ -114,36 +98,21 @@ export function Navbar() {
                   {item}
                 </a>
               ))}
-              <div className="pt-4 pb-2">
-                <button
-                  onClick={() => {
-                    setWalletConnected(!walletConnected);
-                    setIsMenuOpen(false);
-                  }}
-                  className={cn(
-                    "w-full inline-flex items-center justify-center gap-2 rounded-2xl px-6 py-4 text-base font-bold transition-all shadow-xl hover:shadow-2xl",
-                    walletConnected
-                      ? "bg-white text-slate-900 border-2 border-slate-200 hover:border-sky-300 hover:shadow-sky-100"
-                      : "bg-gradient-to-r from-cyan-500 to-sky-600 text-white shadow-sky-500/40 hover:shadow-cyan-500/50"
-                  )}
-                >
-                  {walletConnected ? (
-                    <>
-                      <div className="h-3 w-3 rounded-full bg-emerald-500 shadow-[0_0_12px_rgba(16,185,129,0.8)]" />
-                      {mockWalletAddress}
-                    </>
-                  ) : (
-                    <>
-                      <Wallet className="h-5 w-5 drop-shadow-md" />
-                      <span className="drop-shadow-md">Connect Wallet</span>
-                    </>
-                  )}
-                </button>
+              <div className="pt-4 pb-2 space-y-3">
+                <WalletButton 
+                  isConnected={isConnected}
+                  isLoading={isLoading && !isConnected}
+                  walletAddress={walletAddress}
+                  onConnect={connectWallet}
+                  onLogout={logout}
+                  className="w-full"
+                />
               </div>
             </div>
           </motion.div>
         )}
       </AnimatePresence>
+
     </motion.header>
   );
 }

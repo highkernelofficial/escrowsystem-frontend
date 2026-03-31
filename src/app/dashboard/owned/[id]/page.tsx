@@ -3,14 +3,26 @@
 import { useParams, useRouter } from "next/navigation";
 import { useMemo, useEffect, useState } from "react";
 import { projects as mockProjects } from "@/lib/mockData";
+import { ProtectedView } from "@/components/ProtectedView";
+import { useWalletAuth } from "@/hooks/useWalletAuth";
 import type { Project } from "@/lib/mockData";
 import { OwnedProjectDetails } from "@/components/OwnedProjectDetails";
 import { ArrowLeft } from "lucide-react";
 
 export default function OwnedProjectDetailPage() {
+  const { isConnected } = useWalletAuth();
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
   const [sessionProject, setSessionProject] = useState<Project | null>(null);
+
+  if (!isConnected) {
+    return (
+      <ProtectedView 
+        title="Project Management" 
+        description="To manage your project milestones and escrow funds, please connect your Pera Wallet." 
+      />
+    );
+  }
 
   // Load newly created projects from sessionStorage (created via PostProjectForm)
   useEffect(() => {

@@ -4,6 +4,8 @@ import { useState, useMemo } from "react";
 import { motion } from "framer-motion";
 import { useRouter, useSearchParams } from "next/navigation";
 import { ProjectCard } from "@/components/ProjectCard";
+import { ProtectedView } from "@/components/ProtectedView";
+import { useWalletAuth } from "@/hooks/useWalletAuth";
 import { projects as allProjects } from "@/lib/mockData";
 import {
   Search, ArrowRight, Briefcase
@@ -12,6 +14,7 @@ import {
 export default function DashboardPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { isConnected } = useWalletAuth();
   const view = searchParams.get("view") ?? "all";
   const [searchQuery, setSearchQuery] = useState("");
 
@@ -43,6 +46,16 @@ export default function DashboardPage() {
     else router.push(`/dashboard/projects/${id}`);
   };
 
+  // Gating for private views
+  if ((view === "owned" || view === "work") && !isConnected) {
+    return (
+      <ProtectedView 
+        title={view === "owned" ? "My Projects" : "My Workspace"} 
+        description={`To manage your ${view === "owned" ? "owned" : "active"} projects and secure milestones, please connect your Pera Wallet.`}
+      />
+    );
+  }
+
   return (
     <motion.div
       key={view}
@@ -52,7 +65,7 @@ export default function DashboardPage() {
       transition={{ duration: 0.3 }}
       className="space-y-8"
     >
-      {/* Header */}
+      {/* Header logic */}
       {view === "all" && (
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
@@ -99,20 +112,6 @@ export default function DashboardPage() {
             Explore New Projects
             <ArrowRight className="h-4 w-4" />
           </button>
-        </div>
-      )}
-
-      {/* Search (for all/owned/work list) */}
-      {view !== "work" && (
-        <div className="relative w-full max-w-md">
-          <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-          <input
-            type="search"
-            value={searchQuery}
-            onChange={e => setSearchQuery(e.target.value)}
-            placeholder="Search projects or tech..."
-            className="w-full rounded-2xl border border-slate-200 bg-white pl-11 pr-4 h-12 text-sm font-black text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-indigo-400 focus:ring-4 focus:ring-indigo-50 shadow-sm"
-          />
         </div>
       )}
 

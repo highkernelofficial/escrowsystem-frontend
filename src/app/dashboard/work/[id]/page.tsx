@@ -3,12 +3,24 @@
 import { useParams, useRouter } from "next/navigation";
 import { useMemo } from "react";
 import { projects as mockProjects } from "@/lib/mockData";
+import { ProtectedView } from "@/components/ProtectedView";
+import { useWalletAuth } from "@/hooks/useWalletAuth";
 import { MyWorkDetails } from "@/components/MyWorkDetails";
 import { ArrowLeft } from "lucide-react";
 
 export default function MyWorkDetailPage() {
+  const { isConnected } = useWalletAuth();
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
+
+  if (!isConnected) {
+    return (
+      <ProtectedView 
+        title="Active Workspace" 
+        description="To track your project progress and submit milestones for payment, please connect your Pera Wallet." 
+      />
+    );
+  }
 
   const project = useMemo(() => {
     // Only show projects assigned to user_1

@@ -6,10 +6,12 @@ import {
   ArrowLeft, Lock, BadgeCheck, Clock, CheckCircle2, 
   AlertCircle, RotateCcw, Wallet, Trophy, User, 
   ChevronRight, ExternalLink, MessageSquare, Briefcase, 
-  Layers, Code2, Sparkles, TrendingUp, ShieldCheck
+  Layers, Code2, Sparkles, TrendingUp, ShieldCheck,
+  Loader2
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ApplicationModal } from "@/components/ApplicationModal";
+import { useWalletAuth } from "@/hooks/useWalletAuth";
 import type { Project, Milestone, Freelancer, MilestoneStatus } from "@/lib/mockData";
 
 interface ProjectDetailsProps {
@@ -19,6 +21,11 @@ interface ProjectDetailsProps {
 }
 
 export function ProjectDetails({ project, onBack, isOwner = false }: ProjectDetailsProps) {
+  const { 
+    isConnected, 
+    isLoading, 
+    connectWallet 
+  } = useWalletAuth();
   const [isApplyModalOpen, setIsApplyModalOpen] = useState(false);
   // Simple calculation for progress bar
   const approvedMilestones = project.milestones.filter(m => m.status === "approved").length;
@@ -255,19 +262,39 @@ export function ProjectDetails({ project, onBack, isOwner = false }: ProjectDeta
 
                  {/* PRIMARY ACTIONS */}
                  <div className="space-y-3 pt-4">
-                    <button 
-                      onClick={() => project.status === "open" && setIsApplyModalOpen(true)}
-                      disabled={project.status !== "open"}
-                      className={cn(
-                        "w-full flex items-center justify-center gap-3 h-16 rounded-2xl font-extrabold shadow-xl transition-all outline-none ring-offset-2",
-                        project.status === "open" 
-                          ? "bg-gradient-to-r from-indigo-500 to-sky-500 text-white hover:scale-[1.02] active:scale-95 focus:ring-4 focus:ring-indigo-500/20" 
-                          : "bg-slate-200 text-slate-400 cursor-not-allowed shadow-none"
-                      )}
-                    >
-                       {project.status === "open" ? "Apply for Project" : "Applications Closed"}
-                       {project.status === "open" ? <ChevronRight className="h-5 w-5" /> : <Lock className="h-5 w-5" />}
-                    </button>
+                    {!isConnected ? (
+                      <button 
+                        onClick={connectWallet}
+                        disabled={isLoading}
+                        className="w-full flex items-center justify-center gap-3 h-16 rounded-2xl font-extrabold shadow-xl transition-all outline-none ring-offset-2 bg-white text-slate-900 hover:scale-[1.02] active:scale-95 border-2 border-slate-700/10 hover:border-sky-400 group/connect"
+                      >
+                         {isLoading ? (
+                           <>
+                             <Loader2 className="h-5 w-5 animate-spin" />
+                             <span>Connecting...</span>
+                           </>
+                         ) : (
+                           <>
+                             <Wallet className="h-5 w-5 text-sky-500 transition-transform group-hover/connect:rotate-12" />
+                             <span>Connect Wallet to Apply</span>
+                           </>
+                         )}
+                      </button>
+                    ) : (
+                      <button 
+                        onClick={() => project.status === "open" && setIsApplyModalOpen(true)}
+                        disabled={project.status !== "open"}
+                        className={cn(
+                          "w-full flex items-center justify-center gap-3 h-16 rounded-2xl font-extrabold shadow-xl transition-all outline-none ring-offset-2",
+                          project.status === "open" 
+                            ? "bg-gradient-to-r from-indigo-500 to-sky-500 text-white hover:scale-[1.02] active:scale-95 focus:ring-4 focus:ring-indigo-500/20" 
+                            : "bg-slate-200 text-slate-400 cursor-not-allowed shadow-none"
+                        )}
+                      >
+                         {project.status === "open" ? "Apply for Project" : "Applications Closed"}
+                         {project.status === "open" ? <ChevronRight className="h-5 w-5" /> : <Lock className="h-5 w-5" />}
+                      </button>
+                    )}
                  </div>
 
                  <div className="pt-6 border-t border-slate-800 flex items-center justify-between">
