@@ -62,7 +62,7 @@ export function ProtectedView({
 
       <div className="mt-12 flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-slate-400">
         <div className="h-2 w-2 rounded-full bg-emerald-500" />
-        Secure Algorand Mainnet Authentication
+        Secure Algorand Testnet Authentication
       </div>
     </motion.div>
   );

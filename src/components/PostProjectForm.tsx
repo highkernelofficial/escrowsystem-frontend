@@ -68,7 +68,7 @@ export function PostProjectForm({ onSuccess, onCancel }: PostProjectFormProps) {
       { id: "1", title: "Project Infrastructure", description: "Setup of the core repository, environment variables, and basic CI/CD pipeline.", amount: "20% of Budget" },
       { id: "2", title: "Smart Contract Development", description: "Implementation of project-specific TEAL contracts and rigorous unit testing.", amount: "40% of Budget" },
       { id: "3", title: "Frontend Integration", description: "Development of the React UI and integration with Algorand wallet providers.", amount: "30% of Budget" },
-      { id: "4", title: "Final Security Audit", description: "Comprehensive audit and preparation for mainnet deployment.", amount: "10% of Budget" },
+      { id: "4", title: "Final Security Audit", description: "Comprehensive audit and preparation for testnet deployment.", amount: "10% of Budget" },
     ];
     setMilestones(generatedMilestones);
     setIsGeneratingPlan(false);

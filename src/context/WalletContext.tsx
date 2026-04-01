@@ -3,7 +3,7 @@
 import { createContext, useContext, useState, useEffect, useCallback, useRef, ReactNode } from "react";
 import { PeraWalletConnect } from "@perawallet/connect";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
+import { buildUrl } from "@/config/api";
 
 interface WalletContextType {
   walletAddress: string | null;
@@ -12,8 +12,14 @@ interface WalletContextType {
   isLoading: boolean;
   error: string | null;
   connectWallet: () => Promise<void>;
-  login: () => Promise<void>;
   logout: () => Promise<void>;
+  // Setters for hook-based logic
+  setIsLoading: (val: boolean) => void;
+  setError: (val: string | null) => void;
+  setIsLoggedIn: (val: boolean) => void;
+  setWalletAddress: (val: string | null) => void;
+  setIsConnected: (val: boolean) => void;
+  ensureInstance: () => PeraWalletConnect | null;
 }
 
 const WalletContext = createContext<WalletContextType | undefined>(undefined);
@@ -29,7 +35,9 @@ export function WalletProvider({ children }: { children: ReactNode }) {
 
   const ensureInstance = useCallback(() => {
     if (!peraWalletRef.current && typeof window !== "undefined") {
-      peraWalletRef.current = new PeraWalletConnect();
+      peraWalletRef.current = new PeraWalletConnect({
+        chainId: 416002, // Algorand Testnet
+      });
     }
     return peraWalletRef.current;
   }, []);
@@ -43,6 +51,14 @@ export function WalletProvider({ children }: { children: ReactNode }) {
           setIsConnected(true);
         }
       }).catch(() => {});
+
+      // 2. Add event listener for wallet session
+      instance.connector?.on("disconnect", () => {
+        setWalletAddress(null);
+        setIsConnected(false);
+        setIsLoggedIn(false);
+        localStorage.removeItem("auth_token");
+      });
     }
 
     const token = typeof window !== "undefined" ? localStorage.getItem("auth_token") : null;
@@ -75,57 +91,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     }
   }, [ensureInstance]);
 
-  const login = useCallback(async () => {
-    const instance = ensureInstance();
-    if (!instance || !walletAddress) {
-      setError("Please connect your wallet first");
-      return;
-    }
-
-    setIsLoading(true);
-    setError(null);
-
-    try {
-      const nonceRes = await fetch(`${API_URL}/auth/nonce?wallet=${walletAddress}`);
-      if (!nonceRes.ok) throw new Error("Failed to retrieve authentication nonce");
-      const { message } = await nonceRes.json();
-
-      const encodedMessage = new TextEncoder().encode(message);
-      const signedPayload = await (instance as any).signData([{
-        data: encodedMessage,
-        address: walletAddress
-      }]);
-      
-      if (!signedPayload || !signedPayload[0]) throw new Error("No signature obtained from wallet");
-
-      const signatureArray = signedPayload[0] as Uint8Array;
-      const binary = Array.from(signatureArray).map((b) => String.fromCharCode(b)).join("");
-      const signatureBase64 = btoa(binary);
-
-      const verifyRes = await fetch(`${API_URL}/auth/verify`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          wallet: walletAddress,
-          message: message,
-          signature: signatureBase64
-        })
-      });
-
-      if (!verifyRes.ok) throw new Error("Wallet signature verification failed");
-      const { token } = await verifyRes.json();
-
-      if (token) {
-        localStorage.setItem("auth_token", token);
-        setIsLoggedIn(true);
-      }
-    } catch (err: any) {
-      console.error("Login process error:", err);
-      setError(err?.message || "An unexpected error occurred during login");
-    } finally {
-      setIsLoading(false);
-    }
-  }, [walletAddress, ensureInstance]);
+  // login logic moved to useWalletAuth hook
 
   const logout = useCallback(async () => {
     const instance = ensureInstance();
@@ -147,8 +113,13 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       isLoading,
       error,
       connectWallet,
-      login,
-      logout
+      logout,
+      setIsLoading,
+      setError,
+      setIsLoggedIn,
+      setWalletAddress,
+      setIsConnected,
+      ensureInstance
     }}>
       {children}
     </WalletContext.Provider>

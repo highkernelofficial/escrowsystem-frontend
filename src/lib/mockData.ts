@@ -51,7 +51,7 @@ export const projects: Project[] = [
     milestones: [
       { id: "m1", title: "UI Components Design", description: "Design and implement core dashboard cards and layouts.", amount: "500 ALGO", status: "completed", githubLink: "github.com/davidc/defi-dashboard-ui" },
       { id: "m2", title: "Smart Contract Integration", description: "Connect frontend to governance contracts using Ethers.js.", amount: "1,000 ALGO", status: "approved", githubLink: "github.com/davidc/defi-dashboard-contracts" },
-      { id: "m3", title: "Final Security Audit & Launch", description: "Audit frontend logic and deploy to mainnet.", amount: "1,000 ALGO", status: "submitted", githubLink: "github.com/davidc/defi-dashboard-audit" },
+      { id: "m3", title: "Final Security Audit & Launch", description: "Audit frontend logic and deploy to testnet.", amount: "1,000 ALGO", status: "submitted", githubLink: "github.com/davidc/defi-dashboard-audit" },
     ]
   },
   {
