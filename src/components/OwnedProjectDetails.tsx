@@ -8,10 +8,11 @@ import {
    ChevronRight, ExternalLink, MessageSquare, Briefcase,
    Layers, Code2, Sparkles, TrendingUp, ShieldCheck,
    MoreVertical, ThumbsUp, ThumbsDown, UserMinus, Globe, Play, Loader2,
-   Phone, Mail, Link as LinkIcon, Activity
+   Phone, Mail, Link as LinkIcon, Activity, Star, Users
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { DisputeModal } from "./DisputeModal";
+import { buildUrl } from "@/config/api";
 import type { Project, Milestone, MilestoneStatus, Freelancer } from "@/lib/mockData";
 
 const GithubIcon = ({ className }: { className?: string }) => (
@@ -25,12 +26,19 @@ interface OwnedProjectDetailsProps {
    onBack: () => void;
 }
 
-// Simulated applicants
-const MOCK_APPLICANTS = [
-   { id: "a1", name: "David Chen", role: "Blockchain Architect", rating: 4.9, avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=David", proposal: "I have 5 years of experience in DeFi and have built similar dashboards for Uniswap.", completedProjects: 20, email: "david.c@example.com", mobile: "+1 234 567 8900", linkedin: "linkedin.com/in/davidchen", github: "github.com/dchen33" },
-   { id: "a2", name: "Elena Rodriguez", role: "Fullstack Web3 Developer", rating: 5.0, avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=Elena", proposal: "Ex-Google engineer, specialized in React and Ethers.js. I can finish this in 2 weeks.", completedProjects: 35, email: "elena.r@example.com", mobile: "+44 7700 900077", linkedin: "linkedin.com/in/elenarodz", github: "github.com/elenadev" },
-   { id: "a3", name: "James Holden", role: "Frontend UI/UX", rating: 4.7, avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=James", proposal: "I focus heavily on Framer Motion and Next.js. My designs convert.", completedProjects: 12, email: "james.h@example.com", mobile: "+1 415 555 2671", linkedin: "linkedin.com/in/jholdenui", github: "github.com/jamiespace" },
-];
+interface Applicant {
+   id: string;
+   projectId: string;
+   freelancerId: string;
+   name: string;
+   email: string;
+   mobileNumber: string;
+   linkedin: string;
+   github: string;
+   proposal: string;
+   status: string;
+   createdAt: string;
+}
 
 export function OwnedProjectDetails({ project, onBack }: OwnedProjectDetailsProps) {
    const [activeTab, setActiveTab] = useState<"overview" | "milestones" | "applicants">("overview");
@@ -38,8 +46,69 @@ export function OwnedProjectDetails({ project, onBack }: OwnedProjectDetailsProp
    // Local state for the dynamic actions
    const [assignedFreelancer, setAssignedFreelancer] = useState<Freelancer | null>(project.assignedFreelancer || null);
    const [milestones, setMilestones] = useState<Milestone[]>(project.milestones);
+   const [applicants, setApplicants] = useState<Applicant[]>([]);
+   const [isLoadingApplicants, setIsLoadingApplicants] = useState(false);
+   const [assigningId, setAssigningId] = useState<string | null>(null);
+   const [unassigningId, setUnassigningId] = useState<string | null>(null);
    const [evaluatingId, setEvaluatingId] = useState<string | null>(null);
+   const [assignedAppId, setAssignedAppId] = useState<string | null>(null);
    const [aiFeedback, setAiFeedback] = useState<Record<string, { score: number, message: string }>>({});
+
+   // Sync local state when project prop changes from the backend
+   useEffect(() => {
+    if (project) {
+        setMilestones(project.milestones || []);
+        if (project.assignedFreelancer) {
+            setAssignedFreelancer(project.assignedFreelancer);
+        }
+        fetchApplicants();
+    }
+   }, [project]);
+
+   const fetchApplicants = async () => {
+    if (!project.id) return;
+    
+    setIsLoadingApplicants(true);
+    try {
+        const token = localStorage.getItem("auth_token");
+        const fetchUrl = buildUrl(`/api/applications/project/${project.id}`);
+        
+        console.log(`🚀 [INIT] Fetching applicants for project: ${project.id}...`);
+
+        const response = await fetch(fetchUrl, {
+            headers: {
+                "Content-Type": "application/json",
+                "ngrok-skip-browser-warning": "true",
+                ...(token ? { Authorization: `Bearer ${token}` } : {}),
+            },
+        });
+
+        if (!response.ok) {
+            throw new Error(`Failed to fetch applicants: ${response.status}`);
+        }
+
+        const data: Applicant[] = await response.json();
+        console.log(`✅ [APPLICANTS SUCCESS] Fetched ${data.length} applicants!`);
+        setApplicants(data);
+
+        // Auto-assign the freelancer in the UI if the backend says they are ASSIGNED
+        const assigned = data.find(a => a.status?.toUpperCase() === "ASSIGNED");
+        if (assigned) {
+            setAssignedAppId(assigned.id);
+            setAssignedFreelancer({
+                name: assigned.name,
+                rating: 5.0,
+                avatar: "", 
+                completedProjects: 0
+            });
+        }
+    } catch (err) {
+        console.error("❌ [APPLICANTS ERROR]:", err);
+        addToast("Failed to load applicants", "error");
+    } finally {
+        setIsLoadingApplicants(false);
+    }
+   };
 
    // Dispute State
    const [disputingId, setDisputingId] = useState<string | null>(null);
@@ -59,20 +128,92 @@ export function OwnedProjectDetails({ project, onBack }: OwnedProjectDetailsProp
    const approvedMilestones = milestones.filter(m => m.status === "approved" || m.status === "completed").length;
    const progressPercent = Math.round((approvedMilestones / milestones.length) * 100);
 
-   const handleAssignFreelancer = (applicant: typeof MOCK_APPLICANTS[0]) => {
-      setAssignedFreelancer({
-         name: applicant.name,
-         rating: applicant.rating,
-         avatar: applicant.avatar,
-         completedProjects: applicant.completedProjects
-      });
-      addToast(`Successfully assigned ${applicant.name} to the project!`);
-      setActiveTab("overview");
+   const handleAssignFreelancer = async (applicant: Applicant) => {
+      setAssigningId(applicant.id);
+      try {
+         const token = localStorage.getItem("auth_token");
+         const fetchUrl = buildUrl(`/api/applications/${applicant.id}/assign`);
+         
+         console.log(`🚀 [INIT] Assigning freelancer ${applicant.name} (App ID: ${applicant.id})...`);
+
+         const response = await fetch(fetchUrl, {
+            method: "POST",
+            headers: {
+               "Content-Type": "application/json",
+               "Accept": "application/json",
+               "ngrok-skip-browser-warning": "true",
+               ...(token ? { Authorization: `Bearer ${token}` } : {}),
+            },
+            body: JSON.stringify(applicant),
+         });
+
+         if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            throw new Error(errorData.message || errorData.error || `Failed to assign: ${response.status}`);
+         }
+
+         console.log("✅ [ASSIGN SUCCESS] Freelancer assigned successfully!");
+         
+         setAssignedAppId(applicant.id);
+         setAssignedFreelancer({
+            name: applicant.name,
+            rating: 5.0,
+            avatar: "",
+            completedProjects: 0
+         });
+         
+         // Update the project's local state and refresh applicants
+         fetchApplicants();
+         addToast(`Successfully assigned ${applicant.name} to the project!`);
+         setActiveTab("overview");
+      } catch (err) {
+         console.error("❌ [ASSIGN ERROR]:", err);
+         addToast(err instanceof Error ? err.message : "Failed to assign freelancer", "error");
+      } finally {
+         setAssigningId(null);
+      }
    };
 
-   const handleKickFreelancer = () => {
-      setAssignedFreelancer(null);
-      addToast("Freelancer has been removed from the project.", "error");
+   const handleKickFreelancer = async (appId?: string) => {
+      const idToUnassign = appId || assignedAppId;
+      if (!idToUnassign) {
+         console.warn("⚠️ [UNASSIGN] No application ID available to unassign.");
+         return;
+      }
+      
+      setUnassigningId(idToUnassign);
+      try {
+         const token = localStorage.getItem("auth_token");
+         const fetchUrl = buildUrl(`/api/applications/${idToUnassign}/unassign`);
+         
+         console.log(`🚀 [INIT] Unassigning freelancer (App ID: ${idToUnassign})...`);
+
+         const response = await fetch(fetchUrl, {
+            method: "POST",
+            headers: {
+               "Content-Type": "application/json",
+               "Accept": "application/json",
+               "ngrok-skip-browser-warning": "true",
+               ...(token ? { Authorization: `Bearer ${token}` } : {}),
+            },
+         });
+
+         if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            throw new Error(errorData.message || errorData.error || `Failed to unassign: ${response.status}`);
+         }
+
+         console.log("✅ [UNASSIGN SUCCESS] Freelancer removed!");
+         setAssignedFreelancer(null);
+         setAssignedAppId(null);
+         fetchApplicants();
+         addToast("Freelancer has been removed from the project.", "error");
+      } catch (err) {
+         console.error("❌ [UNASSIGN ERROR]:", err);
+         addToast(err instanceof Error ? err.message : "Failed to remove freelancer", "error");
+      } finally {
+         setUnassigningId(null);
+      }
    };
 
    const handleAIEvaluation = (milestoneId: string) => {
@@ -103,14 +244,43 @@ export function OwnedProjectDetails({ project, onBack }: OwnedProjectDetailsProp
       setIsDisputeModalOpen(true);
    };
 
-   const handleDisputeSubmit = (reason: string) => {
+   const handleDisputeSubmit = async (reason: string) => {
       if (!disputingId) return;
 
-      setMilestones(prev =>
-         prev.map(m => m.id === disputingId ? { ...m, status: "dispute" as MilestoneStatus } : m)
-      );
-      addToast("Dispute has been raised and sent to arbitration.", "error");
-      setIsDisputeModalOpen(false);
+      try {
+         const token = localStorage.getItem("auth_token");
+         
+         if (!token) {
+            throw new Error("Authentication session expired. Please login again.");
+         }
+
+         const response = await fetch(buildUrl("/api/disputes"), {
+            method: "POST",
+            headers: {
+               "Content-Type": "application/json",
+               "ngrok-skip-browser-warning": "true",
+               Authorization: `Bearer ${token}`
+            },
+            body: JSON.stringify({
+               milestoneId: disputingId,
+               reason
+            })
+         });
+
+         if (!response.ok) {
+            const errorData = await response.text().catch(() => "Unknown error occurred.");
+            throw new Error(`Failed to raise dispute: ${errorData}`);
+         }
+
+         setMilestones(prev =>
+            prev.map(m => m.id === disputingId ? { ...m, status: "dispute" as MilestoneStatus } : m)
+         );
+         addToast("Dispute has been raised and sent to arbitration.", "error");
+         setIsDisputeModalOpen(false);
+      } catch (error: any) {
+         console.error("Dispute error:", error);
+         throw error; // Re-throw to handle in DisputeModal's catch block
+      }
    };
 
    const handleReleasePayment = (milestoneId: string) => {
@@ -212,7 +382,9 @@ export function OwnedProjectDetails({ project, onBack }: OwnedProjectDetailsProp
                         </div>
                         <div className="flex flex-col items-end gap-2 bg-slate-50 border border-slate-100 p-6 rounded-[2rem] min-w-[180px] shadow-sm">
                            <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Total Budget</span>
-                           <span className="text-3xl font-black text-emerald-600">{project.budget}</span>
+                           <span className="text-3xl font-black text-emerald-600">
+                              {typeof project.budget === 'number' ? `${project.budget.toLocaleString()} ALGO` : project.budget}
+                           </span>
                         </div>
                      </div>
 
@@ -263,7 +435,7 @@ export function OwnedProjectDetails({ project, onBack }: OwnedProjectDetailsProp
                      activeTab === "applicants" ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-700"
                   )}
                >
-                  Applicants ({MOCK_APPLICANTS.length})
+                  Applicants ({applicants.length})
                </button>
             </div>
 
@@ -318,47 +490,50 @@ export function OwnedProjectDetails({ project, onBack }: OwnedProjectDetailsProp
                                  </div>
                               </div>
 
-                              {assignedFreelancer ? (
-                                 <div className="rounded-[2rem] bg-slate-900 p-1 shadow-xl">
-                                    <div className="rounded-[1.8rem] bg-white p-6 relative overflow-hidden group">
-                                       <div className="absolute inset-0 bg-gradient-to-tr from-sky-100 to-indigo-50 opacity-50" />
-                                       <div className="relative z-10 space-y-4">
-                                          <span className="text-[10px] font-black uppercase tracking-widest bg-sky-100 text-sky-700 px-3 py-1 rounded-full whitespace-nowrap w-fit">Assigned Freelancer</span>
-                                          <div className="flex items-center gap-4">
-                                             <img src={assignedFreelancer.avatar} className="h-16 w-16 rounded-2xl bg-white shadow-sm ring-4 ring-white" alt="avatar" />
-                                             <div>
-                                                <h4 className="text-lg font-black text-slate-900">{assignedFreelancer.name}</h4>
-                                                <div className="flex items-center gap-1 text-amber-500 mt-1">
-                                                   <Trophy className="h-3 w-3" />
-                                                   <span className="text-xs font-black">{assignedFreelancer.rating}</span>
-                                                </div>
-                                             </div>
+                              <div className={cn(
+                                 "relative overflow-hidden rounded-[2.5rem] border border-slate-100 p-8 transition-all hover:bg-white hover:shadow-2xl hover:shadow-slate-200/50",
+                                 !assignedFreelancer ? "bg-slate-50/50 border-dashed" : "bg-white"
+                              )}>
+                                 {assignedFreelancer ? (
+                                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-8">
+                                       <div className="flex items-center gap-6">
+                                          <div className="h-20 w-20 rounded-[2rem] bg-indigo-50 flex items-center justify-center text-indigo-500 ring-4 ring-white shadow-sm transition-transform hover:scale-110">
+                                             <User className="h-10 w-10" />
                                           </div>
-                                          <button
-                                             onClick={handleKickFreelancer}
-                                             className="w-full mt-4 h-12 rounded-xl bg-white border border-rose-200 text-rose-500 text-xs font-black uppercase tracking-widest hover:bg-rose-50 hover:border-rose-300 transition-all flex items-center justify-center gap-2 group/btn"
-                                          >
-                                             <UserMinus className="h-4 w-4 group-hover/btn:scale-110 transition-transform" />
-                                             Remove Freelancer
-                                          </button>
+                                          <div className="space-y-3">
+                                             <h3 className="text-2xl font-black text-slate-900 tracking-tight">{assignedFreelancer.name}</h3>
+                                             <button
+                                                onClick={() => handleKickFreelancer()}
+                                                disabled={unassigningId === assignedAppId}
+                                                className="h-10 px-4 rounded-xl bg-rose-50 text-rose-600 text-[10px] font-black uppercase tracking-widest hover:bg-rose-100 transition-all flex items-center justify-center gap-2 border border-rose-100 shadow-sm disabled:opacity-50"
+                                             >
+                                                {unassigningId === assignedAppId ? (
+                                                   <><Loader2 className="h-4 w-4 animate-spin" /> Removing...</>
+                                                ) : (
+                                                   <><UserMinus className="h-4 w-4" /> Remove Assigned Freelancer</>
+                                                )}
+                                             </button>
+                                          </div>
                                        </div>
                                     </div>
-                                 </div>
-                              ) : (
-                                 <div className="rounded-[2rem] border-2 border-dashed border-slate-200 bg-slate-50 p-8 text-center flex flex-col items-center justify-center space-y-4">
-                                    <div className="h-16 w-16 bg-white rounded-full flex items-center justify-center shadow-sm text-slate-300">
-                                       <User className="h-8 w-8" />
+                                 ) : (
+                                    <div className="flex flex-col items-center justify-center text-center py-6 space-y-6">
+                                       <div className="h-20 w-20 rounded-[2.5rem] bg-slate-100 flex items-center justify-center text-slate-400">
+                                          <User className="h-10 w-10" />
+                                       </div>
+                                       <div className="space-y-2">
+                                          <h3 className="text-xl font-black text-slate-900">No Freelancer Assigned</h3>
+                                          <p className="text-sm font-bold text-slate-500 max-w-[280px]">Review applicants and assign someone to begin.</p>
+                                       </div>
+                                       <button
+                                          onClick={() => setActiveTab("applicants")}
+                                          className="h-12 px-8 rounded-xl bg-slate-900 text-white text-xs font-black uppercase tracking-widest hover:scale-[1.02] active:scale-95 transition-all shadow-lg shadow-slate-200/50 flex items-center justify-center gap-2"
+                                       >
+                                          View Applicants
+                                       </button>
                                     </div>
-                                    <h4 className="font-black text-slate-900">No Freelancer Assigned</h4>
-                                    <p className="text-xs font-bold text-slate-500">Review applicants and assign someone to begin.</p>
-                                    <button
-                                       onClick={() => setActiveTab("applicants")}
-                                       className="h-10 px-6 rounded-full bg-slate-900 text-white text-[10px] font-black uppercase tracking-widest hover:scale-105 transition-all"
-                                    >
-                                       View Applicants
-                                    </button>
-                                 </div>
-                              )}
+                                 )}
+                              </div>
                            </div>
                         </div>
                      </motion.div>
@@ -466,9 +641,16 @@ export function OwnedProjectDetails({ project, onBack }: OwnedProjectDetailsProp
                                        </div>
 
                                        <div className="flex flex-col items-end gap-3 min-w-[240px] xl:border-l xl:border-slate-100 xl:pl-8">
-                                          <div className="text-right w-full bg-slate-50/50 p-6 rounded-3xl border border-slate-100">
+                                          <div className="text-right w-full bg-slate-50/50 p-6 rounded-3xl border border-slate-100 flex flex-col items-end gap-1">
                                              <span className="text-[10px] font-black uppercase tracking-widest text-slate-400 block pb-1">Milestone Value</span>
-                                             <span className="text-3xl font-black text-slate-950">{m.amount}</span>
+                                             <span className="text-3xl font-black text-slate-950">
+                                                {typeof m.amount === 'number' ? `${m.amount.toLocaleString()} ALGO` : m.amount}
+                                             </span>
+                                             {m.percentage !== undefined && m.percentage > 0 && (
+                                                <div className="mt-1 px-3 py-1 rounded-lg bg-indigo-50 border border-indigo-100 w-fit">
+                                                   <span className="text-[10px] font-black text-indigo-600 uppercase tracking-widest">{m.percentage}% of Project</span>
+                                                </div>
+                                             )}
                                           </div>
 
                                           {m.status === "submitted" && (
@@ -536,57 +718,94 @@ export function OwnedProjectDetails({ project, onBack }: OwnedProjectDetailsProp
                         initial={{ opacity: 0, y: 10 }}
                         animate={{ opacity: 1, y: 0 }}
                         exit={{ opacity: 0, y: -10 }}
-                        className="grid grid-cols-1 md:grid-cols-2 gap-6"
+                        className="w-full flex flex-col gap-6"
                      >
-                        {MOCK_APPLICANTS.map((app) => (
-                           <div key={app.id} className="rounded-3xl border border-slate-100 bg-white p-6 shadow-sm hover:shadow-xl transition-all group flex flex-col justify-between">
-                              <div className="space-y-6">
-                                 <div className="flex items-start justify-between">
-                                    <div className="flex gap-4 items-center">
-                                       <div>
-                                          <h4 className="text-xl font-black text-slate-900">{app.name}</h4>
-                                       </div>
-                                    </div>
-                                 </div>
-                                 <div className="grid grid-cols-2 gap-3 p-4 rounded-xl bg-slate-50 border border-slate-100">
-                                    <div className="flex items-center gap-2 text-xs font-bold text-slate-600 truncate">
-                                       <Mail className="h-3 w-3 text-slate-400 shrink-0" /> <span className="truncate">{app.email}</span>
-                                    </div>
-                                    <div className="flex items-center gap-2 text-xs font-bold text-slate-600 truncate">
-                                       <Phone className="h-3 w-3 text-slate-400 shrink-0" /> <span className="truncate">{app.mobile}</span>
-                                    </div>
-                                    <div className="flex items-center gap-2 text-xs font-bold text-slate-600 truncate">
-                                       <LinkIcon className="h-3 w-3 text-slate-400 shrink-0" /> <a href={`https://${app.linkedin}`} className="hover:text-indigo-500 transition-colors truncate">LinkedIn</a>
-                                    </div>
-                                    <div className="flex items-center gap-2 text-xs font-bold text-slate-600 truncate">
-                                       <Globe className="h-3 w-3 text-slate-400 shrink-0" /> <a href={`https://${app.github}`} className="hover:text-indigo-500 transition-colors truncate">GitHub</a>
-                                    </div>
-                                 </div>
-                                 <div className="p-4 rounded-xl bg-slate-50/50 border border-slate-100/50 relative mt-4">
-                                    <MessageSquare className="absolute top-3 right-3 text-slate-200 h-8 w-8" />
-                                    <p className="text-sm font-bold text-slate-600 relative z-10">"{app.proposal}"</p>
-                                 </div>
+                        {isLoadingApplicants ? (
+                           <div className="py-20 flex flex-col items-center justify-center text-center space-y-4">
+                              <Loader2 className="h-10 w-10 text-indigo-500 animate-spin" />
+                              <p className="text-sm font-bold text-slate-500">Retrieving applicants from the ledger...</p>
+                           </div>
+                        ) : applicants.length === 0 ? (
+                           <div className="py-20 flex flex-col items-center justify-center text-center space-y-6">
+                              <div className="h-20 w-20 rounded-[2rem] bg-slate-50 flex items-center justify-center text-slate-300">
+                                 <User className="h-10 w-10" />
                               </div>
-
-                              <div className="mt-6 pt-6 border-t border-slate-100">
-                                 {assignedFreelancer?.name === app.name ? (
-                                    <button
-                                       onClick={handleKickFreelancer}
-                                       className="w-full h-12 rounded-xl bg-white border border-rose-200 text-rose-500 text-xs font-black uppercase tracking-widest hover:bg-rose-50 transition-all"
-                                    >
-                                       Remove Assigned Freelancer
-                                    </button>
-                                 ) : (
-                                    <button
-                                       onClick={() => handleAssignFreelancer(app)}
-                                       className="w-full h-12 rounded-xl bg-slate-900 text-white text-xs font-black uppercase tracking-widest hover:scale-[1.02] active:scale-95 transition-all shadow-lg shadow-slate-200/50"
-                                    >
-                                       Assign Freelancer
-                                    </button>
-                                 )}
+                              <div className="space-y-2">
+                                 <h3 className="text-xl font-black text-slate-900">No Applicants Yet</h3>
+                                 <p className="text-sm font-bold text-slate-500 max-w-[280px]">Proposals will appear here once freelancers apply to your project.</p>
                               </div>
                            </div>
-                        ))}
+                        ) : (
+                           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                              {applicants.map((app) => (
+                                 <div key={app.id} className="rounded-3xl border border-slate-100 bg-white p-6 shadow-sm hover:shadow-xl transition-all group flex flex-col justify-between">
+                                    <div className="space-y-6">
+                                       <div className="flex items-start justify-between">
+                                          <div className="flex gap-4 items-center">
+                                             <div>
+                                                <h4 className="text-xl font-black text-slate-900">{app.name}</h4>
+                                                <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Freelancer Candidate</span>
+                                             </div>
+                                          </div>
+                                          <span className="px-3 py-1 rounded-full bg-indigo-50 text-indigo-600 text-[10px] font-black uppercase tracking-widest border border-indigo-100 shadow-sm">
+                                             {app.status || "Applied"}
+                                          </span>
+                                       </div>
+                                       <div className="grid grid-cols-2 gap-3 p-4 rounded-xl bg-slate-50 border border-slate-100">
+                                          <div className="flex items-center gap-2 text-xs font-bold text-slate-600 truncate">
+                                             <Mail className="h-3 w-3 text-slate-400 shrink-0" /> <span className="truncate">{app.email}</span>
+                                          </div>
+                                          <div className="flex items-center gap-2 text-xs font-bold text-slate-600 truncate">
+                                             <Phone className="h-3 w-3 text-slate-400 shrink-0" /> <span className="truncate">{app.mobileNumber}</span>
+                                          </div>
+                                          <div className="flex items-center gap-2 text-xs font-bold text-slate-600 truncate">
+                                             <LinkIcon className="h-3 w-3 text-slate-400 shrink-0" /> <a href={app.linkedin.startsWith('http') ? app.linkedin : `https://${app.linkedin}`} target="_blank" rel="noopener noreferrer" className="hover:text-indigo-500 transition-colors truncate">LinkedIn</a>
+                                          </div>
+                                          <div className="flex items-center gap-2 text-xs font-bold text-slate-600 truncate">
+                                             <Globe className="h-3 w-3 text-slate-400 shrink-0" /> <a href={app.github.startsWith('http') ? app.github : `https://${app.github}`} target="_blank" rel="noopener noreferrer" className="hover:text-indigo-500 transition-colors truncate">GitHub</a>
+                                          </div>
+                                       </div>
+                                       <div className="p-4 rounded-xl bg-slate-50/50 border border-slate-100/50 relative mt-4">
+                                          <MessageSquare className="absolute top-3 right-3 text-slate-200 h-8 w-8" />
+                                          <p className="text-sm font-bold text-slate-600 relative z-10 leading-relaxed italic">"{app.proposal}"</p>
+                                       </div>
+                                    </div>
+
+                                    <div className="mt-6 pt-6 border-t border-slate-100">
+                                       {(assignedFreelancer?.name === app.name || app.status?.toUpperCase() === "ASSIGNED") ? (
+                                          <button
+                                             onClick={() => handleKickFreelancer(app.id)}
+                                             disabled={unassigningId === app.id}
+                                             className="w-full h-12 rounded-xl bg-white border border-rose-200 text-rose-500 text-xs font-black uppercase tracking-widest hover:bg-rose-50 transition-all flex items-center justify-center gap-2 disabled:opacity-50 shadow-sm"
+                                          >
+                                             {unassigningId === app.id ? (
+                                                <><Loader2 className="h-4 w-4 animate-spin" /> Removing...</>
+                                             ) : (
+                                                <><UserMinus className="h-4 w-4" /> Remove Assigned Freelancer</>
+                                             )}
+                                          </button>
+                                       ) : app.status?.toUpperCase() === "PENDING" ? (
+                                          <button
+                                             onClick={() => handleAssignFreelancer(app)}
+                                             disabled={assigningId === app.id}
+                                             className="w-full h-12 rounded-xl bg-slate-900 text-white text-xs font-black uppercase tracking-widest hover:scale-[1.02] active:scale-95 transition-all shadow-lg shadow-slate-200/50 flex items-center justify-center gap-2 disabled:opacity-50"
+                                          >
+                                             {assigningId === app.id ? (
+                                                <><Loader2 className="h-4 w-4 animate-spin" /> Assigning...</>
+                                             ) : (
+                                                <><BadgeCheck className="h-4 w-4" /> Assign Freelancer</>
+                                             )}
+                                          </button>
+                                       ) : (
+                                          <div className="w-full h-12 rounded-xl bg-slate-50 border border-slate-100 flex items-center justify-center text-[10px] font-black uppercase tracking-widest text-slate-400">
+                                             {app.status || "Applied"}
+                                          </div>
+                                       )}
+                                    </div>
+                                 </div>
+                              ))}
+                           </div>
+                        )}
                      </motion.div>
                   )}
                </AnimatePresence>

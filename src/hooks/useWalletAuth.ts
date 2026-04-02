@@ -151,5 +151,6 @@ export function useWalletAuth() {
     connectWallet: context.connectWallet,
     login,
     logout: context.logout,
+    setIsLoggedIn: context.setIsLoggedIn,
   };
 }

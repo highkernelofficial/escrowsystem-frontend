@@ -1,13 +1,15 @@
 export type ProjectStatus = "open" | "assigned" | "completed";
-export type MilestoneStatus = "pending" | "submitted" | "approved" | "dispute" | "reassigned" | "completed";
+export type MilestoneStatus = "pending" | "submitted" | "approved" | "dispute" | "reassigned" | "completed" | "assigned";
 
 export interface Milestone {
   id: string;
   title: string;
   description: string;
-  amount: string;
+  amount: string | number;
   status: MilestoneStatus;
+  percentage?: number;
   githubLink?: string;
+  createdAt?: string;
 }
 
 export interface Freelancer {
@@ -17,13 +19,46 @@ export interface Freelancer {
   completedProjects: number;
 }
 
+export interface BackendProject {
+  id: string;
+  clientId: string;
+  title: string;
+  description: string;
+  techStack: string[];
+  expectedOutcome: string;
+  status: ProjectStatus;
+  appId: number;
+  totalAmount: number;
+  createdAt: string;
+}
+
+export interface BackendMilestone {
+  id: string;
+  projectId: string;
+  title: string;
+  description: string;
+  amount: number;
+  assignedFreelancer: string;
+  status: MilestoneStatus;
+  attemptCount: number;
+  reassignmentReason: string;
+  percentage: number;
+  createdAt: string;
+}
+
+export interface ProjectWithMilestonesResponse {
+  project: BackendProject;
+  milestones: BackendMilestone[];
+}
+
 export interface Project {
   id: string;
   title: string;
   description: string;
+  expectedOutcome?: string;
   outcome: string;
   techStack: string[];
-  budget: string;
+  budget: string | number;
   status: ProjectStatus;
   milestones: Milestone[];
   assignedFreelancer?: Freelancer;

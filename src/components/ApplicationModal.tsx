@@ -4,7 +4,7 @@ import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { 
   X, User, Mail, Link as LinkIcon, Send, 
-  CheckCircle2, Sparkles, Loader2, Globe, Phone
+  CheckCircle2, Sparkles, Loader2, Globe, Phone, AlertCircle
 } from "lucide-react";
 
 const GithubIcon = ({ className }: { className?: string }) => (
@@ -13,15 +13,18 @@ const GithubIcon = ({ className }: { className?: string }) => (
   </svg>
 );
 import { cn } from "@/lib/utils";
+import { buildUrl } from "@/config/api";
 
 interface ApplicationModalProps {
   isOpen: boolean;
   onClose: () => void;
   projectTitle: string;
+  projectId: string;
 }
 
-export function ApplicationModal({ isOpen, onClose, projectTitle }: ApplicationModalProps) {
+export function ApplicationModal({ isOpen, onClose, projectTitle, projectId }: ApplicationModalProps) {
   const [step, setStep] = useState<"form" | "submitting" | "success">("form");
+  const [error, setError] = useState<string | null>(null);
   const [formData, setFormData] = useState({
     name: "",
     email: "",
@@ -31,13 +34,50 @@ export function ApplicationModal({ isOpen, onClose, projectTitle }: ApplicationM
     proposal: "",
   });
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setStep("submitting");
-    // Simulate API call
-    setTimeout(() => {
+    setError(null);
+
+    try {
+      const token = localStorage.getItem("auth_token");
+      const fetchUrl = buildUrl("/api/applications");
+      
+      console.log(`🚀 [INIT] Submitting proposal for project ID: ${projectId}...`);
+
+      const response = await fetch(fetchUrl, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Accept": "application/json",
+          "ngrok-skip-browser-warning": "true",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({
+          projectId: projectId,
+          name: formData.name,
+          email: formData.email,
+          mobileNumber: formData.mobile,
+          linkedin: formData.linkedin,
+          github: formData.github,
+          proposal: formData.proposal,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        console.error("❌ [APPLICATION ERROR RESPONSE]:", errorData);
+        const errorMessage = errorData.message || errorData.error || `Error ${response.status}`;
+        throw new Error(`Failed to submit application: ${errorMessage}`);
+      }
+
+      console.log("✅ [APPLICATION SUCCESS] Proposal submitted successfully!");
       setStep("success");
-    }, 2000);
+    } catch (err) {
+      console.error("❌ [APPLICATION ERROR]:", err);
+      setError(err instanceof Error ? err.message : "Failed to send proposal. Please try again.");
+      setStep("form");
+    }
   };
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
@@ -60,7 +100,6 @@ export function ApplicationModal({ isOpen, onClose, projectTitle }: ApplicationM
     <AnimatePresence>
       {isOpen && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
-          {/* Backdrop Overlay */}
           <motion.div
             variants={overlayVariants}
             initial="hidden"
@@ -70,7 +109,6 @@ export function ApplicationModal({ isOpen, onClose, projectTitle }: ApplicationM
             className="absolute inset-0 bg-slate-950/40 backdrop-blur-md"
           />
 
-          {/* Modal Content */}
           <motion.div
             variants={modalVariants}
             initial="hidden"
@@ -78,7 +116,6 @@ export function ApplicationModal({ isOpen, onClose, projectTitle }: ApplicationM
             exit="exit"
             className="relative w-full max-w-xl overflow-hidden rounded-[3rem] bg-white shadow-2xl ring-1 ring-slate-200"
           >
-            {/* Header / Background Accent */}
             <div className="absolute top-0 inset-x-0 h-32 bg-gradient-to-r from-indigo-500 via-sky-500 to-emerald-500 opacity-5" />
             <div className="absolute top-8 right-8 z-20">
                <button 
@@ -112,9 +149,15 @@ export function ApplicationModal({ isOpen, onClose, projectTitle }: ApplicationM
                         </p>
                      </div>
 
+                     {error && (
+                        <div className="flex items-center gap-2 p-4 rounded-2xl bg-rose-50 border border-rose-100 text-rose-600 text-xs font-bold">
+                           <AlertCircle className="h-4 w-4 shrink-0" />
+                           {error}
+                        </div>
+                     )}
+
                      <form onSubmit={handleSubmit} className="space-y-5">
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                           {/* Name */}
                            <div className="space-y-2">
                               <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-4">Full Name</label>
                               <div className="relative group">

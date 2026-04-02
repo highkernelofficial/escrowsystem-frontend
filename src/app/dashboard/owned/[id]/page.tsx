@@ -2,18 +2,83 @@
 
 import { useParams, useRouter } from "next/navigation";
 import { useMemo, useEffect, useState } from "react";
-import { projects as mockProjects } from "@/lib/mockData";
 import { ProtectedView } from "@/components/ProtectedView";
 import { useWalletAuth } from "@/hooks/useWalletAuth";
 import type { Project } from "@/lib/mockData";
 import { OwnedProjectDetails } from "@/components/OwnedProjectDetails";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, AlertCircle, Loader2 } from "lucide-react";
+import { buildUrl } from "@/config/api";
 
 export default function OwnedProjectDetailPage() {
-  const { isConnected } = useWalletAuth();
+  const { isConnected, setIsLoggedIn } = useWalletAuth();
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
-  const [sessionProject, setSessionProject] = useState<Project | null>(null);
+  const [project, setProject] = useState<Project | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const fetchProject = async () => {
+      if (!id) return;
+      
+      try {
+        setIsLoading(true);
+        const token = localStorage.getItem("auth_token");
+        const fetchUrl = buildUrl(`/api/projects/me/owned/${id}/with-milestones`);
+        
+        console.log(`🚀 [INIT] Fetching owned project detail for ID: ${id} from:`, fetchUrl);
+
+        let response = await fetch(fetchUrl, {
+          headers: {
+            "ngrok-skip-browser-warning": "true",
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
+        });
+
+        if (response.status === 403 || response.status === 401) {
+          console.error("🛑 [SESSION EXPIRED] Clearing auth token and resetting login state.");
+          localStorage.removeItem("auth_token");
+          setIsLoggedIn(false);
+          throw new Error("Your session has expired. Please connect and login again.");
+        }
+
+        if (!response.ok) {
+          if (response.status === 404) {
+            setProject(null);
+            return;
+          }
+          throw new Error(`Failed to fetch project: ${response.status}`);
+        }
+
+        const data = await response.json();
+        console.log("✅ [OWNED API SUCCESS] Raw Data Received:", data);
+
+        const mappedProject: Project = {
+          id: data.project.id?.toString() || id,
+          title: data.project.title || "Untitled Project",
+          description: data.project.description || "No description provided.",
+          outcome: data.project.expectedOutcome || "",
+          techStack: data.project.techStack || [],
+          budget: data.project.totalAmount || 0,
+          status: (data.project.status?.toLowerCase() as any) || "open",
+          milestones: data.milestones || [],
+          ownerId: data.project.clientId || "unknown",
+        };
+
+        console.log("🎯 [OWNED Mapped Data]:", mappedProject);
+        setProject(mappedProject);
+      } catch (err) {
+        console.error("❌ [OWNED API ERROR]:", err);
+        setError(err instanceof Error ? err.message : "Failed to fetch project");
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    if (isConnected) {
+      fetchProject();
+    }
+  }, [id, isConnected]);
 
   if (!isConnected) {
     return (
@@ -24,35 +89,30 @@ export default function OwnedProjectDetailPage() {
     );
   }
 
-  // Load newly created projects from sessionStorage (created via PostProjectForm)
-  useEffect(() => {
-    try {
-      const stored = JSON.parse(sessionStorage.getItem("localProjects") || "[]") as Project[];
-      const found = stored.find(p => p.id === id);
-      if (found) setSessionProject(found);
-    } catch {
-      // ignore parse errors
-    }
-  }, [id]);
-
-  const project = useMemo<Project | null>(() => {
-    // First check sessionStorage (newly created projects)
-    if (sessionProject) return sessionProject;
-    // Then check mock data (owned by user_1)
-    return mockProjects.find(p => p.id === id && p.ownerId === "user_1") ?? null;
-  }, [id, sessionProject]);
-
-  if (!project) {
+  if (isLoading) {
     return (
-      <div className="flex h-[70vh] flex-col items-center justify-center gap-6 text-center">
-        <div className="h-20 w-20 rounded-[2rem] bg-slate-100 flex items-center justify-center text-slate-400 text-4xl font-black">
-          404
+      <div className="flex h-[70vh] flex-col items-center justify-center space-y-4">
+        <Loader2 className="h-12 w-12 text-indigo-500 animate-spin" />
+        <p className="text-slate-500 font-bold animate-pulse">Loading your project metrics...</p>
+      </div>
+    );
+  }
+
+  if (error || !project) {
+    return (
+      <div className="flex h-[70vh] flex-col items-center justify-center gap-6 text-center px-4">
+        <div className="h-24 w-24 rounded-[2.5rem] bg-rose-50 flex items-center justify-center text-rose-500 shadow-xl shadow-rose-100/50">
+          <AlertCircle className="h-10 w-10" />
         </div>
-        <h1 className="text-2xl font-black text-slate-900">Project Not Found</h1>
-        <p className="text-slate-500 font-medium">This owned project doesn&apos;t exist or you may not have access.</p>
+        <div className="space-y-2">
+          <h1 className="text-3xl font-black text-slate-900">Project Not Found</h1>
+          <p className="text-slate-500 font-bold max-w-sm">
+            {error ? `System Error: ${error}` : "This project doesn't exist or you might not have owner permissions."}
+          </p>
+        </div>
         <button
           onClick={() => router.push("/dashboard?view=owned")}
-          className="flex items-center gap-2 rounded-2xl bg-slate-900 px-6 py-3 text-sm font-black text-white hover:scale-105 transition-all"
+          className="flex items-center gap-3 rounded-2xl bg-slate-900 px-8 py-4 text-sm font-black text-white hover:scale-105 active:scale-95 transition-all shadow-xl shadow-slate-200"
         >
           <ArrowLeft className="h-4 w-4" />
           Back to Your Projects

@@ -12,7 +12,7 @@ import { cn } from "@/lib/utils";
 interface DisputeModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSubmit: (reason: string) => void;
+  onSubmit: (reason: string) => Promise<void>;
   milestoneTitle: string;
 }
 
@@ -21,7 +21,7 @@ export function DisputeModal({ isOpen, onClose, onSubmit, milestoneTitle }: Disp
   const [reason, setReason] = useState("");
   const [error, setError] = useState("");
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!reason.trim()) {
       setError("Please provide a reason for the dispute.");
@@ -30,11 +30,13 @@ export function DisputeModal({ isOpen, onClose, onSubmit, milestoneTitle }: Disp
     setError("");
     setStep("submitting");
     
-    // Simulate API delay
-    setTimeout(() => {
-      onSubmit(reason);
+    try {
+      await onSubmit(reason);
       setStep("success");
-    }, 2000);
+    } catch (err: any) {
+      setError(err?.message || "Failed to submit dispute. Please try again.");
+      setStep("form");
+    }
   };
 
   const handleClose = () => {
