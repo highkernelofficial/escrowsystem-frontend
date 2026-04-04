@@ -96,7 +96,7 @@ export function About() {
             </div>
             <h3 className="text-2xl font-black text-slate-900 mb-4 tracking-tight drop-shadow-sm">Decentralized Arbitration</h3>
             <p className="text-slate-600 leading-relaxed mb-8 font-medium">
-              In the rare event of a complex edge case, our fallback decentralized autonomous organization (DAO) mechanism steps in to ensure extreme fairness.
+              In the rare event of a complex edge case, our fallback decentralized autonomous organization mechanism steps in to ensure extreme fairness.
             </p>
             <div className="inline-flex items-center text-amber-600 font-extrabold text-sm uppercase tracking-wider group-hover:gap-3 transition-all bg-white px-5 py-2.5 rounded-full shadow-[0_5px_15px_rgba(245,158,11,0.15)] group-hover:shadow-[0_8px_25px_rgba(245,158,11,0.3)] border border-amber-50">
                <span className="drop-shadow-sm">Read the whitepaper</span>

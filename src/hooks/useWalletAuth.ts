@@ -136,7 +136,12 @@ export function useWalletAuth() {
       }
     } catch (err: any) {
       console.error("Login error:", err);
-      setError(err?.message || "Signing failed or user rejected the request");
+      // Detailed error for network/CORS issues
+      if (err instanceof TypeError && (err.message.toLocaleLowerCase().includes("fetch") || err.message.toLocaleLowerCase().includes("network error"))) {
+        setError("Network error: Unable to reach the authentication server. Please check your internet or if the backend/ngrok tunnel is running.");
+      } else {
+        setError(err?.message || "Signing failed or user rejected the request");
+      }
     } finally {
       setIsLoading(false);
     }

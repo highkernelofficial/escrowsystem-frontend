@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import algosdk from "algosdk";
 import { motion, AnimatePresence } from "framer-motion";
 import {
    ArrowLeft, Lock, BadgeCheck, Clock, CheckCircle2,
@@ -8,10 +9,11 @@ import {
    ChevronRight, ExternalLink, MessageSquare, Briefcase,
    Layers, Code2, Sparkles, TrendingUp, ShieldCheck,
    MoreVertical, ThumbsUp, ThumbsDown, UserMinus, Globe, Play, Loader2,
-   Phone, Mail, Link as LinkIcon, Activity, Star, Users
+   Phone, Mail, Link as LinkIcon, Activity, Star, Users, Banknote, Send
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { DisputeModal } from "./DisputeModal";
+import { useWallet } from "@/context/WalletContext";
 import { buildUrl } from "@/config/api";
 import type { Project, Milestone, MilestoneStatus, Freelancer } from "@/lib/mockData";
 
@@ -41,6 +43,7 @@ interface Applicant {
 }
 
 export function OwnedProjectDetails({ project, onBack }: OwnedProjectDetailsProps) {
+   const { walletAddress, ensureInstance } = useWallet();
    const [activeTab, setActiveTab] = useState<"overview" | "milestones" | "applicants">("overview");
 
    // Local state for the dynamic actions
@@ -55,10 +58,18 @@ export function OwnedProjectDetails({ project, onBack }: OwnedProjectDetailsProp
    const [assignedAppId, setAssignedAppId] = useState<string | null>(null);
    const [aiFeedback, setAiFeedback] = useState<Record<string, { score: number, message: string }>>({});
 
+   // Funding State
+   const [fundingTxnHash, setFundingTxnHash] = useState<string | null>(project.fundingTxnHash || null);
+   const [isPreparingFund, setIsPreparingFund] = useState(false);
+   const [isConfirmingFund, setIsConfirmingFund] = useState(false);
+   const [prepareTxnHash, setPrepareTxnHash] = useState<string | null>(null);
+   const [releasingMilestoneId, setReleasingMilestoneId] = useState<string | null>(null);
+
    // Sync local state when project prop changes from the backend
     useEffect(() => {
      if (project) {
          setMilestones(project.milestones || []);
+          setFundingTxnHash(project.fundingTxnHash || null);
          if (project.assignedFreelancer) {
              setAssignedFreelancer(project.assignedFreelancer);
          }
@@ -349,11 +360,8 @@ export function OwnedProjectDetails({ project, onBack }: OwnedProjectDetailsProp
        }
     };
 
-   const handleApproveMilestone = (milestoneId: string) => {
-      setMilestones(prev =>
-         prev.map(m => m.id === milestoneId ? { ...m, status: "completed" as MilestoneStatus } : m)
-      );
-      addToast("Milestone Approved & Payment Released!");
+   const handleApproveMilestone = async (milestoneId: string) => {
+      await handleReleaseMilestonePayment(milestoneId);
    };
 
    const handleDisputeClick = (milestoneId: string) => {
@@ -400,11 +408,217 @@ export function OwnedProjectDetails({ project, onBack }: OwnedProjectDetailsProp
       }
    };
 
-   const handleReleasePayment = (milestoneId: string) => {
-      setMilestones(prev =>
-         prev.map(m => m.id === milestoneId ? { ...m, status: "completed" as MilestoneStatus } : m)
-      );
-      addToast("Payment Released successfully to the freelancer!");
+   const handleReleasePayment = async (milestoneId: string) => {
+      await handleReleaseMilestonePayment(milestoneId);
+   };
+
+   // ─── Release Milestone Payment (Full Blockchain Flow) ──────────
+   const handleReleaseMilestonePayment = async (milestoneId: string) => {
+      if (!walletAddress) {
+         addToast("Please connect your wallet first.", "error");
+         return;
+      }
+
+      setReleasingMilestoneId(milestoneId);
+      try {
+         const token = localStorage.getItem("auth_token");
+
+         // Step 1: Prepare - Get unsigned transaction from backend
+         console.log(`🚀 [RELEASE] Preparing payment release for milestone: ${milestoneId}...`);
+         const prepareResponse = await fetch(buildUrl("/api/payments/release/prepare"), {
+            method: "POST",
+            headers: {
+               "Content-Type": "application/json",
+               "ngrok-skip-browser-warning": "true",
+               ...(token ? { Authorization: `Bearer ${token}` } : {}),
+            },
+            body: JSON.stringify({ milestoneId }),
+         });
+
+         if (!prepareResponse.ok) {
+            const errorData = await prepareResponse.text().catch(() => "Unknown error");
+            throw new Error(`Release prepare failed: ${prepareResponse.status} - ${errorData}`);
+         }
+
+         const prepareData = await prepareResponse.json();
+         const base64Txn = prepareData.unsignedTxn;
+         if (!base64Txn) throw new Error("No unsigned transaction received from backend");
+
+         // Step 2: Decode the unsigned transaction
+         const decodedTxn = algosdk.decodeUnsignedTransaction(Buffer.from(base64Txn, "base64"));
+
+         // Step 3: Sign with Pera Wallet
+         const peraWallet = ensureInstance();
+         if (!peraWallet) throw new Error("Pera Wallet not initialized");
+
+         const signedTxns = await peraWallet.signTransaction([
+            [{ txn: decodedTxn, signers: [walletAddress] }]
+         ]);
+         if (!signedTxns || !signedTxns[0]) throw new Error("Transaction signing was rejected");
+
+         // Step 4: Submit signed transaction to Algorand Network
+         const algodClient = new algosdk.Algodv2("", "https://testnet-api.algonode.cloud", "");
+         const txnResponse = await algodClient.sendRawTransaction(signedTxns[0] as any).do();
+         const txHash = (txnResponse as any).txId || (txnResponse as any).txid;
+         console.log("✅ [RELEASE] Transaction signed and submitted:", txHash);
+
+         // Step 5: Confirm with backend - save txnHash in DB
+         console.log(`🚀 [RELEASE] Confirming release for milestone: ${milestoneId}...`);
+         const confirmResponse = await fetch(buildUrl("/api/payments/release/confirm"), {
+            method: "POST",
+            headers: {
+               "Content-Type": "application/json",
+               "ngrok-skip-browser-warning": "true",
+               ...(token ? { Authorization: `Bearer ${token}` } : {}),
+            },
+            body: JSON.stringify({ milestoneId, txnHash: txHash }),
+         });
+
+         if (!confirmResponse.ok) {
+            const errorData = await confirmResponse.text().catch(() => "Unknown error");
+            throw new Error(`Release confirm failed: ${confirmResponse.status} - ${errorData}`);
+         }
+
+         const confirmData = await confirmResponse.json();
+         console.log("✅ [RELEASE] Payment release confirmed!", confirmData);
+
+         // Step 6: Update local UI state
+         setMilestones(prev =>
+            prev.map(m => m.id === milestoneId ? { ...m, status: "completed" as MilestoneStatus } : m)
+         );
+         addToast("Payment released successfully to the freelancer!");
+
+      } catch (err: any) {
+         console.error("❌ [RELEASE ERROR]:", err);
+         
+         // Handle Pera Wallet 4100 (Pending Transaction)
+         if (err.message?.includes("4100") || err.message?.toLowerCase().includes("pending")) {
+            addToast("A transaction is already pending on your phone. Please check Pera Wallet or Refresh.", "error");
+         } else {
+            addToast(err.message || "Failed to release payment", "error");
+         }
+      } finally {
+         setReleasingMilestoneId(null);
+      }
+   };
+
+   // ─── Funding Handlers ─────────────────────────────────────
+   const handlePrepareFund = async () => {
+      if (!walletAddress) {
+         addToast("Please connect your wallet first.", "error");
+         return;
+      }
+
+      setIsPreparingFund(true);
+      try {
+         const token = localStorage.getItem("auth_token");
+         const fetchUrl = buildUrl(`/api/projects/${project.id}/fund/prepare`);
+         
+         console.log(`🚀 [FUND] Preparing fund for project: ${project.id}...`);
+
+         // Step 1: Get unsigned transaction from backend
+         const response = await fetch(fetchUrl, {
+            method: "POST",
+            headers: {
+               "Content-Type": "application/json",
+               "ngrok-skip-browser-warning": "true",
+               ...(token ? { Authorization: `Bearer ${token}` } : {}),
+            },
+         });
+
+         if (!response.ok) {
+            const errorData = await response.text().catch(() => "Unknown error");
+            throw new Error(`Fund prepare failed: ${response.status} - ${errorData}`);
+         }
+
+         const data = await response.json();
+         console.log("✅ [FUND PREPARE SUCCESS]", data);
+         
+         const base64Txn = data.unsignedTxn;
+         if (!base64Txn) throw new Error("No unsigned transaction received from backend");
+
+         // Step 2: Decode the unsigned transaction
+         const decodedTxn = algosdk.decodeUnsignedTransaction(Buffer.from(base64Txn, "base64"));
+
+         // Step 3: Sign with Pera Wallet
+         const peraWallet = ensureInstance();
+         if (!peraWallet) throw new Error("Pera Wallet not initialized");
+
+         const signedTxns = await peraWallet.signTransaction([
+            [{ txn: decodedTxn, signers: [walletAddress] }]
+         ]);
+         if (!signedTxns || !signedTxns[0]) throw new Error("Transaction signing was rejected");
+
+         // Step 4: Submit signed transaction to Algorand Network
+         const algodClient = new algosdk.Algodv2("", "https://testnet-api.algonode.cloud", "");
+         const txnResponse = await algodClient.sendRawTransaction(signedTxns[0] as any).do();
+         const txId = (txnResponse as any).txId || (txnResponse as any).txid;
+
+         // Step 5: Store the REAL blockchain transaction ID
+         setPrepareTxnHash(txId);
+         console.log("✅ [FUND] Transaction signed and submitted:", txId);
+         addToast("Fund transaction signed & sent! Now confirm the fund.", "success");
+      } catch (err: any) {
+         console.error("❌ [FUND PREPARE ERROR]:", err);
+         
+         // Handle Pera Wallet 4100 (Pending Transaction)
+         if (err.message?.includes("4100") || err.message?.toLowerCase().includes("pending")) {
+            addToast("A transaction is already pending on your phone. Please check Pera Wallet or Refresh.", "error");
+         } else {
+            addToast(err.message || "Failed to prepare fund", "error");
+         }
+      } finally {
+         setIsPreparingFund(false);
+      }
+   };
+
+   const handleConfirmFund = async () => {
+      if (!prepareTxnHash) {
+         addToast("Please sign and send the fund transaction first.", "error");
+         return;
+      }
+
+      setIsConfirmingFund(true);
+      try {
+         const token = localStorage.getItem("auth_token");
+         const fetchUrl = buildUrl(`/api/projects/fund/confirm`);
+         
+         // Send the REAL blockchain transaction ID to backend
+         const requestBody = {
+            projectId: project.id,
+            txnHash: prepareTxnHash,
+         };
+         
+         console.log(`🚀 [FUND] Confirming fund for project: ${project.id}...`, requestBody);
+
+         const response = await fetch(fetchUrl, {
+            method: "POST",
+            headers: {
+               "Content-Type": "application/json",
+               "ngrok-skip-browser-warning": "true",
+               ...(token ? { Authorization: `Bearer ${token}` } : {}),
+            },
+            body: JSON.stringify(requestBody),
+         });
+
+         if (!response.ok) {
+            const errorData = await response.text().catch(() => "Unknown error");
+            throw new Error(`Fund confirm failed: ${response.status} - ${errorData}`);
+         }
+
+         const data = await response.json();
+         console.log("✅ [FUND CONFIRM SUCCESS]", data);
+         
+         // Update local state - set the hash so milestones become visible
+         const newHash = data.fundingTxnHash || data.funding_txn_hash || data.txHash || prepareTxnHash;
+         setFundingTxnHash(newHash);
+         addToast("Escrow funded successfully! Milestones are now active.", "success");
+      } catch (err: any) {
+         console.error("❌ [FUND CONFIRM ERROR]:", err);
+         addToast(err.message || "Failed to confirm fund", "error");
+      } finally {
+         setIsConfirmingFund(false);
+      }
    };
 
    const getStatusColor = (status: string) => {
@@ -666,6 +880,39 @@ export function OwnedProjectDetails({ project, onBack }: OwnedProjectDetailsProp
                         exit={{ opacity: 0, y: -10 }}
                         className="space-y-12 pb-20"
                      >
+                        {/* ─── FUNDING GATE: Show buttons if no funding hash ─── */}
+                        {!fundingTxnHash ? (
+                           <motion.div
+                              initial={{ opacity: 0, y: 10 }}
+                              animate={{ opacity: 1, y: 0 }}
+                              className="flex flex-col sm:flex-row items-center justify-center gap-4 py-12"
+                           >
+                              <button
+                                 onClick={handlePrepareFund}
+                                 disabled={isPreparingFund || isConfirmingFund}
+                                 className="w-full sm:w-auto h-16 px-10 rounded-2xl bg-slate-900 text-white text-xs font-black uppercase tracking-widest hover:scale-[1.02] active:scale-95 transition-all shadow-xl shadow-slate-900/20 flex items-center justify-center gap-3 disabled:opacity-50 disabled:cursor-not-allowed border border-slate-800"
+                              >
+                                 {isPreparingFund ? (
+                                    <><Loader2 className="h-5 w-5 animate-spin" /> Preparing...</>
+                                 ) : (
+                                    <><Banknote className="h-5 w-5" /> Prepare Fund</>
+                                 )}
+                              </button>
+                              <button
+                                 onClick={handleConfirmFund}
+                                 disabled={isConfirmingFund || isPreparingFund}
+                                 className="w-full sm:w-auto h-16 px-10 rounded-2xl bg-emerald-500 text-white text-xs font-black uppercase tracking-widest hover:scale-[1.02] active:scale-95 transition-all shadow-xl shadow-emerald-500/20 flex items-center justify-center gap-3 disabled:opacity-50 disabled:cursor-not-allowed border border-emerald-400"
+                              >
+                                 {isConfirmingFund ? (
+                                    <><Loader2 className="h-5 w-5 animate-spin" /> Confirming...</>
+                                 ) : (
+                                    <><Send className="h-5 w-5" /> Confirm Fund</>
+                                 )}
+                              </button>
+                           </motion.div>
+                        ) : (
+                        /* ─── FUNDED: Show Milestones ─── */
+                        <>
                         <div className="flex items-center justify-between px-2">
                             <h2 className="text-2xl font-black text-slate-900 uppercase flex items-center gap-3">
                                <Activity className="h-6 w-6 text-indigo-500" /> Milestone Execution Roadmap
@@ -844,9 +1091,14 @@ export function OwnedProjectDetails({ project, onBack }: OwnedProjectDetailsProp
                                                      </div>
                                                      <button
                                                         onClick={() => handleApproveMilestone(m.id)}
-                                                        className="w-full h-14 rounded-2xl bg-emerald-500 text-white text-xs font-black uppercase tracking-widest hover:scale-[1.02] active:scale-95 transition-all shadow-xl shadow-emerald-200 flex items-center justify-center gap-3"
+                                                        disabled={releasingMilestoneId === m.id}
+                                                        className="w-full h-14 rounded-2xl bg-emerald-500 text-white text-xs font-black uppercase tracking-widest hover:scale-[1.02] active:scale-95 transition-all shadow-xl shadow-emerald-200 flex items-center justify-center gap-3 disabled:opacity-50"
                                                      >
-                                                        <CheckCircle2 className="h-5 w-5" /> Release Payment
+                                                        {releasingMilestoneId === m.id ? (
+                                                           <><Loader2 className="h-5 w-5 animate-spin" /> Releasing...</>
+                                                        ) : (
+                                                           <><CheckCircle2 className="h-5 w-5" /> Release Payment</>
+                                                        )}
                                                      </button>
                                                      <button
                                                         onClick={() => handleDisputeClick(m.id)}
@@ -863,9 +1115,14 @@ export function OwnedProjectDetails({ project, onBack }: OwnedProjectDetailsProp
                                              <div className="w-full pt-2">
                                                 <button
                                                    onClick={() => handleReleasePayment(m.id)}
-                                                   className="w-full h-16 rounded-2xl bg-slate-900 text-white text-xs font-black uppercase tracking-widest hover:scale-[1.02] active:scale-95 transition-all shadow-2xl flex items-center justify-center gap-3"
+                                                   disabled={releasingMilestoneId === m.id}
+                                                   className="w-full h-16 rounded-2xl bg-slate-900 text-white text-xs font-black uppercase tracking-widest hover:scale-[1.02] active:scale-95 transition-all shadow-2xl flex items-center justify-center gap-3 disabled:opacity-50"
                                                 >
-                                                   <Wallet className="h-5 w-5" /> Release Escrow Funds
+                                                   {releasingMilestoneId === m.id ? (
+                                                      <><Loader2 className="h-5 w-5 animate-spin" /> Releasing...</>
+                                                   ) : (
+                                                      <><Wallet className="h-5 w-5" /> Release Escrow Funds</>
+                                                   )}
                                                 </button>
                                              </div>
                                           )}
@@ -884,6 +1141,8 @@ export function OwnedProjectDetails({ project, onBack }: OwnedProjectDetailsProp
                               </motion.div>
                            ))}
                         </div>
+                        </>
+                        )}
                      </motion.div>
                   )}
 

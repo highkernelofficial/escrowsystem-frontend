@@ -62,13 +62,18 @@ export default function DashboardPage() {
         if (response.status === 403 || response.status === 401) {
           console.warn(`⚠️ [AUTH] API returned ${response.status} for view: ${view}`);
           
-          if (view === "all" && token) {
-            console.log("🔄 [RETRY] Falling back to public fetch for 'all' view...");
-            response = await fetch(fetchUrl, {
-              headers: { "ngrok-skip-browser-warning": "true" }
-            });
+          if (view === "all") {
+            if (token) {
+              console.log("🔄 [RETRY] Falling back to public fetch for 'all' view...");
+              response = await fetch(fetchUrl, {
+                headers: { "ngrok-skip-browser-warning": "true" }
+              });
+            } else {
+              // It was already a public fetch without token, just let line 81 handle it
+              console.warn("⚠️ [AUTH] Public fetch failed. Check backend/ngrok status.");
+            }
           } else {
-            // For protected views, clear the session as it's invalid
+            // For protected views (owned/work), clear the session as it's invalid
             console.error("🛑 [SESSION EXPIRED] Clearing auth token and resetting login state.");
             localStorage.removeItem("auth_token");
             setIsLoggedIn(false);
@@ -90,9 +95,10 @@ export default function DashboardPage() {
           outcome: item.project.expectedOutcome || "",
           techStack: item.project.techStack || [],
           budget: `${item.project.totalAmount || 0} ALGO`,
-          status: (item.project.status?.toLowerCase() === "created" ? "open" : item.project.status?.toLowerCase()) || "open",
+          status: (["created", "funded"].includes(item.project.status?.toLowerCase()) ? "open" : item.project.status?.toLowerCase() as any) || "open",
           milestones: item.milestones || [],
           ownerId: item.project.clientId || "unknown",
+          fundingTxnHash: item.project.fundingTxnHash || item.project.funding_txn_hash || null,
         }));
         
         setAllProjects(mappedProjects);

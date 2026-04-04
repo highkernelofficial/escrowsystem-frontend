@@ -10,7 +10,7 @@ import { ArrowLeft, AlertCircle, Loader2 } from "lucide-react";
 import { buildUrl } from "@/config/api";
 
 export default function OwnedProjectDetailPage() {
-  const { isConnected, setIsLoggedIn } = useWalletAuth();
+  const { isConnected, isLoggedIn, setIsLoggedIn } = useWalletAuth();
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
   const [project, setProject] = useState<Project | null>(null);
@@ -36,10 +36,17 @@ export default function OwnedProjectDetailPage() {
         });
 
         if (response.status === 403 || response.status === 401) {
-          console.error("🛑 [SESSION EXPIRED] Clearing auth token and resetting login state.");
-          localStorage.removeItem("auth_token");
-          setIsLoggedIn(false);
-          throw new Error("Your session has expired. Please connect and login again.");
+          console.warn(`⚠️ [AUTH] Access denied to owned project ${id} (${response.status})`);
+          
+          if (token) {
+            console.error("🛑 [SESSION EXPIRED] Clearing auth token and resetting login state.");
+            localStorage.removeItem("auth_token");
+            setIsLoggedIn(false);
+            throw new Error("Your session has expired. Please connect and login again.");
+          } else {
+            console.log("🛡️ [AUTH] Missing token for protected route. Redirecting to auth gate.");
+            throw new Error("Authentication required to view project details.");
+          }
         }
 
         if (!response.ok) {
@@ -60,9 +67,10 @@ export default function OwnedProjectDetailPage() {
           outcome: data.project.expectedOutcome || "",
           techStack: data.project.techStack || [],
           budget: data.project.totalAmount || 0,
-          status: (data.project.status?.toLowerCase() as any) || "open",
+          status: (["created", "funded"].includes(data.project.status?.toLowerCase()) ? "open" : data.project.status?.toLowerCase() as any) || "open",
           milestones: data.milestones || [],
           ownerId: data.project.clientId || "unknown",
+          fundingTxnHash: data.project.fundingTxnHash || data.project.funding_txn_hash || null,
         };
 
         console.log("🎯 [OWNED Mapped Data]:", mappedProject);
@@ -75,10 +83,10 @@ export default function OwnedProjectDetailPage() {
       }
     };
 
-    if (isConnected) {
+    if (isConnected && isLoggedIn) {
       fetchProject();
     }
-  }, [id, isConnected]);
+  }, [id, isConnected, isLoggedIn, setIsLoggedIn]);
 
   if (!isConnected) {
     return (

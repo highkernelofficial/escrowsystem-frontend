@@ -10,7 +10,7 @@ import { buildUrl } from "@/config/api";
 import type { Project, ProjectWithMilestonesResponse } from "@/lib/mockData";
 
 export default function MyWorkDetailPage() {
-  const { isConnected, isLoggedIn } = useWalletAuth();
+  const { isConnected, isLoggedIn, setIsLoggedIn } = useWalletAuth();
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
   
@@ -37,6 +37,20 @@ export default function MyWorkDetailPage() {
             ...(token ? { Authorization: `Bearer ${token}` } : {}),
           },
         });
+
+        if (response.status === 403 || response.status === 401) {
+          console.warn(`⚠️ [AUTH] Access denied to work project ${id} (${response.status})`);
+          
+          if (token) {
+            console.error("🛑 [SESSION EXPIRED] Clearing auth token and resetting login state.");
+            localStorage.removeItem("auth_token");
+            setIsLoggedIn(false);
+            throw new Error("Your session has expired. Please connect and login again.");
+          } else {
+            console.log("🛡️ [AUTH] Missing token for protected route. Redirecting to auth gate.");
+            throw new Error("Authentication required to view project details.");
+          }
+        }
 
         if (response.status === 404) {
           throw new Error("Project not found in your workspace.");
@@ -82,7 +96,7 @@ export default function MyWorkDetailPage() {
     };
 
     fetchProjectDetail();
-  }, [id, isConnected, isLoggedIn]);
+  }, [id, isConnected, isLoggedIn, setIsLoggedIn]);
 
   if (!isConnected || !isLoggedIn) {
     return (

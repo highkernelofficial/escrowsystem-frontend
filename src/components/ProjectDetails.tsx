@@ -30,6 +30,7 @@ export function ProjectDetails({ project, onBack, isOwner = false }: ProjectDeta
   
   const isOpen = project.status?.toLowerCase() === "open";
   const isAssigned = project.status?.toLowerCase() === "assigned";
+  const isFunded = !!project.fundingTxnHash;
 
   // Simple calculation for progress bar
   const approvedMilestones = project.milestones.filter(m => m.status === "approved").length;
@@ -300,17 +301,17 @@ export function ProjectDetails({ project, onBack, isOwner = false }: ProjectDeta
                   </button>
                 ) : (
                   <button
-                    onClick={() => isOpen && setIsApplyModalOpen(true)}
-                    disabled={!isOpen}
+                    onClick={() => isFunded && isOpen && setIsApplyModalOpen(true)}
+                    disabled={!isFunded || !isOpen}
                     className={cn(
                       "w-full flex items-center justify-center gap-3 h-16 rounded-2xl font-extrabold shadow-xl transition-all outline-none ring-offset-2",
-                      isOpen
+                      (isFunded && isOpen)
                         ? "bg-gradient-to-r from-indigo-500 to-sky-500 text-white hover:scale-[1.02] active:scale-95 focus:ring-4 focus:ring-indigo-500/20"
                         : "bg-slate-200 text-slate-400 cursor-not-allowed shadow-none"
                     )}
                   >
-                    {isOpen ? "Apply for Project" : "Applications Closed"}
-                    {isOpen ? <ChevronRight className="h-5 w-5" /> : <Lock className="h-5 w-5" />}
+                    {!isFunded ? "Awaiting Funding" : (isOpen ? "Apply for Project" : "Applications Closed")}
+                    {!isFunded ? <Lock className="h-5 w-5" /> : (isOpen ? <ChevronRight className="h-5 w-5" /> : <Lock className="h-5 w-5" />)}
                   </button>
                 )}
               </div>

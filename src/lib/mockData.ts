@@ -67,6 +67,7 @@ export interface Project {
   assignedFreelancer?: Freelancer;
   ownerId: string;
   assignedFreelancerId?: string;
+  fundingTxnHash?: string | null;
 }
 
 export const projects: Project[] = [

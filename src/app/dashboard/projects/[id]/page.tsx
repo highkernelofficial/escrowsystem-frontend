@@ -62,7 +62,7 @@ export default function ProjectDetailPage() {
           expectedOutcome: data.project.expectedOutcome,
           techStack: data.project.techStack,
           budget: data.project.totalAmount, // Backend uses totalAmount (number)
-          status: data.project.status,
+          status: (["created", "funded"].includes(data.project.status?.toLowerCase()) ? "open" : data.project.status?.toLowerCase() as any) || "open",
           ownerId: data.project.clientId,
           milestones: data.milestones.map(m => ({
             id: m.id,
@@ -72,7 +72,8 @@ export default function ProjectDetailPage() {
             status: m.status,
             percentage: m.percentage,
             createdAt: m.createdAt
-          }))
+          })),
+          fundingTxnHash: (data.project as any).fundingTxnHash || (data.project as any).funding_txn_hash || null,
         };
 
         setProject(mappedProject);

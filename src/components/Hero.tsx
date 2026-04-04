@@ -201,7 +201,7 @@ export function Hero() {
               <div className="mt-8 rounded-2xl bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 p-6 text-center shadow-[0_20px_50px_rgba(15,23,42,0.4)] relative overflow-hidden group border-2 border-slate-700/50">
                 <div className="absolute inset-0 bg-[linear-gradient(60deg,transparent_20%,rgba(56,189,248,0.2)_50%,transparent_80%)] bg-[length:200%_200%,100%_100%] animate-[shimmer_2s_infinite_linear] opacity-100 transition-opacity" />
                 <span className="block text-xs font-bold text-sky-400 mb-2 tracking-widest uppercase drop-shadow-[0_0_8px_rgba(56,189,248,0.6)]">Total Payout Pending</span>
-                <span className="text-5xl font-extrabold text-white leading-none tracking-tight drop-shadow-[0_0_20px_rgba(56,189,248,0.5)]">2.5 ETH</span>
+                <span className="text-5xl font-extrabold text-white leading-none tracking-tight drop-shadow-[0_0_20px_rgba(56,189,248,0.5)]">2.5 ALGO</span>
               </div>
             </motion.div>
 
