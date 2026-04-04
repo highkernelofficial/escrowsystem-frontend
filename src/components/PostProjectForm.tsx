@@ -1,15 +1,17 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
    Plus, X, Briefcase, Coins, Layers,
    ArrowRight, Loader2, Sparkles, Wand2, Calendar,
-   Trash2, Edit3, TrendingUp
+   Trash2, Edit3, TrendingUp, CheckCircle2, ShieldCheck
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { Project, MilestoneStatus } from "@/lib/mockData";
 import { buildUrl } from "@/config/api";
+import { useWallet } from "@/context/WalletContext";
+import algosdk from "algosdk";
 
 interface Milestone {
    id: string;
@@ -27,6 +29,7 @@ interface CreatedProjectResponse {
    techStack?: string[];
    totalAmount?: number;
    status?: string;
+   project?: { id: string | number };
    milestones?: CreatedMilestoneResponse[];
 }
 
@@ -112,6 +115,31 @@ export function PostProjectForm({ onSuccess, onCancel }: PostProjectFormProps) {
    const [techStack, setTechStack] = useState<string[]>(["React", "Next.js", "ALGO SDK"]);
    const [milestones, setMilestones] = useState<Milestone[]>([]);
 
+   // Post-creation blockchain states
+   const [createdProjectInfo, setCreatedProjectInfo] = useState<{ id: string; project: Project } | null>(null);
+   const [isPreparing, setIsPreparing] = useState(false);
+   const [isConfirming, setIsConfirming] = useState(false);
+   const [txnId, setTxnId] = useState<string | null>(null);
+   const [step, setStep] = useState<"created" | "prepared" | "confirmed">("created");
+
+   const { walletAddress, ensureInstance } = useWallet();
+ 
+   // Sync milestone percentages whenever budget changes
+   useEffect(() => {
+      const budget = toAlgoValue(formData.budget);
+      setMilestones((prev) =>
+         prev.map((m) => {
+            try {
+               const { percentage } = parseMilestoneInput(m.amount, budget);
+               if (m.percentage === percentage) return m;
+               return { ...m, percentage };
+            } catch {
+               return m.percentage === 0 ? m : { ...m, percentage: 0 };
+            }
+         })
+      );
+   }, [formData.budget]);
+
    const improveDescription = async () => {
       setIsImprovingDesc(true);
       await new Promise((r) => setTimeout(r, 1500));
@@ -165,7 +193,9 @@ export function PostProjectForm({ onSuccess, onCancel }: PostProjectFormProps) {
          });
 
          if (!response.ok) {
-            throw new Error(`Failed to generate milestones: ${response.status}`);
+            const errorText = await response.text().catch(() => "Unknown error");
+            console.error("❌ Milestone Generation Failed:", response.status, errorText);
+            throw new Error(`Failed to generate milestones: ${response.status} ${errorText}`);
          }
 
          const data = await response.json();
@@ -321,10 +351,26 @@ export function PostProjectForm({ onSuccess, onCancel }: PostProjectFormProps) {
 
          const createdProject: CreatedProjectResponse = await projectResponse.json();
 
-         // Use backend ID if available, otherwise fallback to a random ID
-         const createdProjectId = createdProject?.id?.toString() || Math.random().toString(36).slice(2, 11);
+         console.log("FULL BACKEND RESPONSE =", createdProject);
+         console.log("TOP LEVEL ID =", createdProject?.id);
+         console.log("NESTED PROJECT ID =", createdProject?.project?.id);
 
-         console.log("✅ Project confirmed and created:", createdProject);
+         const backendProjectId =
+            createdProject?.id?.toString() ||
+            createdProject?.project?.id?.toString();
+
+         if (!backendProjectId) {
+            console.error("❌ Backend did not return project id:", createdProject);
+            throw new Error("Project ID was not returned by backend.");
+         }
+
+         const createdProjectId = backendProjectId;
+
+         if (!/^[0-9a-fA-F-]{36}$/.test(createdProjectId)) {
+            throw new Error("Backend returned invalid project UUID.");
+         }
+
+         console.log("✅ Project confirmed and created with valid UUID:", createdProjectId);
 
          const newProject: Project = {
             id: createdProjectId,
@@ -345,7 +391,9 @@ export function PostProjectForm({ onSuccess, onCancel }: PostProjectFormProps) {
             ownerId: "user_1",
          };
 
-         onSuccess(newProject);
+         // Instead of immediate onSuccess, show the deployment steps
+         setCreatedProjectInfo({ id: createdProjectId, project: newProject });
+         // onSuccess(newProject);
       } catch (err: any) {
          console.error("Submission error:", err);
          alert(err?.message || "Something went wrong while creating the project.");
@@ -370,6 +418,199 @@ export function PostProjectForm({ onSuccess, onCancel }: PostProjectFormProps) {
          transition: { type: "spring", stiffness: 100, damping: 20 },
       },
    } as const;
+
+   const handlePrepareContract = async () => {
+      if (!createdProjectInfo || !walletAddress) return;
+      console.log("🛠️ Preparing Contract for ID:", createdProjectInfo.id);
+      setIsPreparing(true);
+
+      try {
+         const token = localStorage.getItem("auth_token");
+         const response = await fetch(buildUrl(`/api/projects/${createdProjectInfo.id}/deploy-contract/prepare`), {
+            method: "POST",
+            headers: {
+               "Content-Type": "application/json",
+               "ngrok-skip-browser-warning": "true",
+               Authorization: `Bearer ${token}`,
+            },
+            body: JSON.stringify({
+               projectId: createdProjectInfo.id,
+               unsignedTxn: "", // Initially empty as per standard flow if backend generates it
+               message: "Preparing escrow contract..."
+            })
+         });
+
+         if (!response.ok) throw new Error("Failed to prepare contract transaction");
+
+         const data = await response.json();
+         // The structure is expected to be { projectId, unsignedTxn, message }
+         const base64Txn = data.unsignedTxn;
+
+         if (!base64Txn) throw new Error("No unsigned transaction received from backend");
+
+         // --- Sign with Pera Wallet ---
+         const decodedTxn = algosdk.decodeUnsignedTransaction(Buffer.from(base64Txn, "base64"));
+         const peraWallet = ensureInstance();
+
+         if (!peraWallet) throw new Error("Pera Wallet not initialized");
+
+         const signedTxns = await peraWallet.signTransaction([
+            [{ txn: decodedTxn, signers: [walletAddress] }]
+         ]);
+
+         if (!signedTxns || !signedTxns[0]) throw new Error("Failed to sign transaction");
+
+         // --- Submit to Network ---
+         const algodClient = new algosdk.Algodv2("", "https://testnet-api.algonode.cloud", "");
+         const response_txn = await algodClient.sendRawTransaction(signedTxns[0] as any).do();
+         const txId = (response_txn as any).txId || (response_txn as any).txid;
+
+         setTxnId(txId);
+         setStep("prepared");
+         console.log("✅ Transaction signed and submitted:", txId);
+
+      } catch (err: any) {
+         console.error("Preparation error:", err);
+         alert(err.message || "Failed to prepare contract.");
+      } finally {
+         setIsPreparing(false);
+      }
+   };
+
+   const handleConfirmDeployment = async () => {
+      if (!createdProjectInfo || !txnId) return;
+      setIsConfirming(true);
+
+      try {
+         const token = localStorage.getItem("auth_token");
+         const response = await fetch(buildUrl("/api/projects/deploy-contract/confirm"), {
+            method: "POST",
+            headers: {
+               "Content-Type": "application/json",
+               "ngrok-skip-browser-warning": "true",
+               Authorization: `Bearer ${token}`,
+            },
+            body: JSON.stringify({
+               projectId: createdProjectInfo.id,
+               txnId: txnId
+            })
+         });
+
+         if (!response.ok) throw new Error("Failed to confirm contract deployment");
+
+         setStep("confirmed");
+         console.log("✅ Contract deployment confirmed!");
+
+         // Success! Now redirect using the original onSuccess callback
+         setTimeout(() => {
+            onSuccess(createdProjectInfo.project);
+         }, 1500);
+
+      } catch (err: any) {
+         console.error("Confirmation error:", err);
+         alert(err.message || "Failed to confirm deployment.");
+      } finally {
+         setIsConfirming(false);
+      }
+   };
+
+   if (createdProjectInfo) {
+      return (
+         <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="mx-auto max-w-2xl text-center space-y-12 py-20"
+         >
+            <div className="space-y-6">
+               <div className="mx-auto h-24 w-24 rounded-[2.5rem] bg-emerald-50 flex items-center justify-center text-emerald-500 shadow-2xl shadow-emerald-100 border border-emerald-100">
+                  <CheckCircle2 className="h-12 w-12" />
+               </div>
+               <div className="space-y-3">
+                  <h2 className="text-4xl font-black text-slate-900 tracking-tight">Project Created Successfully!</h2>
+                  <p className="text-slate-500 font-bold max-w-md mx-auto">
+                     Your project <span className="text-indigo-600">"{createdProjectInfo.project.title}"</span> has been saved. Now, let's deploy the escrow contract.
+                  </p>
+               </div>
+            </div>
+
+            <div className="grid gap-6">
+               <button
+                  onClick={handlePrepareContract}
+                  disabled={isPreparing || step !== "created"}
+                  className={cn(
+                     "group relative flex items-center justify-between p-8 rounded-[2.5rem] border-2 transition-all overflow-hidden",
+                     step === "created"
+                        ? "bg-white border-indigo-100 hover:border-indigo-500 hover:shadow-2xl hover:shadow-indigo-100"
+                        : "bg-indigo-50 border-indigo-200 opacity-60"
+                  )}
+               >
+                  <div className="flex items-center gap-6 text-left">
+                     <div className={cn(
+                        "h-14 w-14 rounded-2xl flex items-center justify-center transition-colors",
+                        step === "created" ? "bg-indigo-600 text-white" : "bg-indigo-100 text-indigo-400"
+                     )}>
+                        <Layers className="h-7 w-7" />
+                     </div>
+                     <div>
+                        <h3 className="font-black text-xl text-slate-900">Prepare Contract</h3>
+                        <p className="text-sm font-bold text-slate-400">Fetch and sign the smart contract txn</p>
+                     </div>
+                  </div>
+                  {isPreparing ? (
+                     <Loader2 className="h-8 w-8 text-indigo-600 animate-spin" />
+                  ) : step !== "created" ? (
+                     <CheckCircle2 className="h-8 w-8 text-indigo-500" />
+                  ) : (
+                     <ArrowRight className="h-8 w-8 text-slate-200 group-hover:text-indigo-500 group-hover:translate-x-2 transition-all" />
+                  )}
+               </button>
+
+               <button
+                  onClick={handleConfirmDeployment}
+                  disabled={isConfirming || step !== "prepared"}
+                  className={cn(
+                     "group relative flex items-center justify-between p-8 rounded-[2.5rem] border-2 transition-all overflow-hidden",
+                     step === "prepared"
+                        ? "bg-white border-emerald-100 hover:border-emerald-500 hover:shadow-2xl hover:shadow-emerald-100"
+                        : "bg-emerald-50 border-emerald-200 opacity-60",
+                     step === "confirmed" && "bg-emerald-50 border-emerald-300 opacity-100"
+                  )}
+               >
+                  <div className="flex items-center gap-6 text-left">
+                     <div className={cn(
+                        "h-14 w-14 rounded-2xl flex items-center justify-center transition-colors",
+                        step === "prepared" ? "bg-emerald-600 text-white" : "bg-emerald-100 text-emerald-400",
+                        step === "confirmed" && "bg-emerald-600 text-white"
+                     )}>
+                        <ShieldCheck className="h-7 w-7" />
+                     </div>
+                     <div>
+                        <h3 className="font-black text-xl text-slate-900">Deploy Contract</h3>
+                        <p className="text-sm font-bold text-slate-400">Finalize and verify deployment on-chain</p>
+                     </div>
+                  </div>
+                  {isConfirming ? (
+                     <Loader2 className="h-8 w-8 text-emerald-600 animate-spin" />
+                  ) : step === "confirmed" ? (
+                     <Sparkles className="h-8 w-8 text-emerald-500 animate-pulse" />
+                  ) : (
+                     <ArrowRight className="h-8 w-8 text-slate-200 group-hover:text-emerald-500 group-hover:translate-x-2 transition-all" />
+                  )}
+               </button>
+            </div>
+
+            {step === "confirmed" && (
+               <motion.div
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="text-emerald-600 font-black flex items-center justify-center gap-2"
+               >
+                  <Sparkles className="h-5 w-5" /> All systems go! Redirecting to project...
+               </motion.div>
+            )}
+         </motion.div>
+      );
+   }
 
    return (
       <motion.div

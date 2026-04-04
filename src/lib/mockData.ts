@@ -9,6 +9,9 @@ export interface Milestone {
   status: MilestoneStatus;
   percentage?: number;
   githubLink?: string;
+  demoLink?: string;
+  submissionNotes?: string;
+  submissionId?: string;
   createdAt?: string;
 }
 

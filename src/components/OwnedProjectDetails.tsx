@@ -51,19 +51,98 @@ export function OwnedProjectDetails({ project, onBack }: OwnedProjectDetailsProp
    const [assigningId, setAssigningId] = useState<string | null>(null);
    const [unassigningId, setUnassigningId] = useState<string | null>(null);
    const [evaluatingId, setEvaluatingId] = useState<string | null>(null);
+   const [evaluatingSeconds, setEvaluatingSeconds] = useState(0);
    const [assignedAppId, setAssignedAppId] = useState<string | null>(null);
    const [aiFeedback, setAiFeedback] = useState<Record<string, { score: number, message: string }>>({});
 
    // Sync local state when project prop changes from the backend
+    useEffect(() => {
+     if (project) {
+         setMilestones(project.milestones || []);
+         if (project.assignedFreelancer) {
+             setAssignedFreelancer(project.assignedFreelancer);
+         }
+         fetchApplicants();
+         fetchSubmissions();
+     }
+    }, [project]);
+
+    // Evaluation Timer & Resilience Handler
    useEffect(() => {
-    if (project) {
-        setMilestones(project.milestones || []);
-        if (project.assignedFreelancer) {
-            setAssignedFreelancer(project.assignedFreelancer);
+      let interval: NodeJS.Timeout;
+      if (evaluatingId) {
+         setEvaluatingSeconds(0);
+         interval = setInterval(() => {
+            setEvaluatingSeconds(s => s + 1);
+         }, 1000);
+
+         const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+            e.preventDefault();
+            e.returnValue = "AI evaluation in progress. Closing this tab will cancel the analysis. Are you sure?";
+         };
+         window.addEventListener("beforeunload", handleBeforeUnload);
+
+         return () => {
+            clearInterval(interval);
+            window.removeEventListener("beforeunload", handleBeforeUnload);
+         };
+      }
+   }, [evaluatingId]);
+
+   const getEvaluationMessage = () => {
+      if (evaluatingSeconds < 30) return "Fetching Repository...";
+      if (evaluatingSeconds < 90) return "Deep-thinking: Analyzing Code Patterns...";
+      if (evaluatingSeconds < 150) return "Running Security & Quality Checks...";
+      if (evaluatingSeconds < 180) return "Generating Final Report...";
+      return "Almost there! Finalizing AI Feedback...";
+   };
+
+    const fetchSubmissions = async () => {
+        if (!project.id) return;
+        
+        try {
+            const token = localStorage.getItem("auth_token");
+            const fetchUrl = buildUrl(`/api/submissions/client/project/${project.id}`);
+            
+            console.log(`🚀 [INIT] Fetching submissions for project: ${project.id}...`);
+
+            const response = await fetch(fetchUrl, {
+                headers: {
+                    "Content-Type": "application/json",
+                    "ngrok-skip-browser-warning": "true",
+                    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+                },
+            });
+
+            if (!response.ok) {
+                throw new Error(`Failed to fetch submissions: ${response.status}`);
+            }
+
+            const data: any[] = await response.json();
+            console.log(`✅ [SUBMISSIONS SUCCESS] Fetched ${data.length} milestone submissions!`);
+
+            setMilestones(prev => 
+                prev.map(m => {
+                    const milestoneData = data.find(item => item.milestoneId === m.id);
+                    if (milestoneData && milestoneData.submissions?.length > 0) {
+                        const latestSub = milestoneData.submissions[0];
+                        return {
+                            ...m,
+                                githubLink: latestSub.githubLink,
+                                demoLink: latestSub.demoLink,
+                                submissionNotes: latestSub.description, // Map description to submissionNotes
+                                submissionId: latestSub.id, // Capture submissionId for AI evaluation
+                                status: "submitted" // Force local status update to unlock the UI
+                            };
+                        }
+                        return m;
+                    })
+                );
+        } catch (err) {
+            console.error("❌ [SUBMISSIONS ERROR]:", err);
+            // No need to toast here if it's a routine fetch, but helps for debugging
         }
-        fetchApplicants();
-    }
-   }, [project]);
+    };
 
    const fetchApplicants = async () => {
     if (!project.id) return;
@@ -216,21 +295,59 @@ export function OwnedProjectDetails({ project, onBack }: OwnedProjectDetailsProp
       }
    };
 
-   const handleAIEvaluation = (milestoneId: string) => {
-      setEvaluatingId(milestoneId);
-      // Simulate AI delay
-      setTimeout(() => {
-         setAiFeedback(prev => ({
-            ...prev,
-            [milestoneId]: {
-               score: Math.floor(Math.random() * 6) + 94, // 94-99 score
-               message: "Code meets all requirements. Clean architecture detected. Ready for approval."
-            }
-         }));
-         setEvaluatingId(null);
-         addToast("AI Evaluation Complete", "info");
-      }, 3000);
-   };
+   const handleAIEvaluation = async (milestoneId: string) => {
+       const milestone = milestones.find(m => m.id === milestoneId);
+       const submissionId = milestone?.submissionId;
+
+       if (!submissionId) {
+          console.warn("⚠️ [AI EVAL] No submission ID found for milestone:", milestoneId);
+          addToast("No submission found to evaluate.", "error");
+          return;
+       }
+
+       setEvaluatingId(milestoneId);
+       try {
+          const token = localStorage.getItem("auth_token");
+          const fetchUrl = buildUrl(`/api/submissions/${submissionId}/evaluate-ai`);
+          
+          console.log(`🚀 [INIT] Requesting AI Evaluation for submission: ${submissionId}...`);
+
+          const response = await fetch(fetchUrl, {
+             method: "POST",
+             headers: {
+                "Content-Type": "application/json",
+                "ngrok-skip-browser-warning": "true",
+                ...(token ? { Authorization: `Bearer ${token}` } : {}),
+             },
+             keepalive: true, // Tells the browser to prioritize the connection
+          });
+
+          if (!response.ok) {
+             if (response.status === 504) {
+                 throw new Error("Analysis is taking longer than usual (Gateway Timeout). Please refresh in a minute to see if the AI generated the result natively.");
+             }
+             const errorData = await response.text().catch(() => "Unknown error");
+             throw new Error(`AI Evaluation failed: ${response.status} - ${errorData}`);
+          }
+
+          const data = await response.json();
+          console.log("✅ [AI EVAL SUCCESS] Response:", data);
+
+          setAiFeedback(prev => ({
+             ...prev,
+             [milestoneId]: {
+                score: data.aiScore || 0,
+                message: data.aiFeedback || "AI check complete. No detailed feedback provided."
+             }
+          }));
+          addToast("AI Evaluation Complete", "success");
+       } catch (err: any) {
+          console.error("❌ [AI EVAL ERROR]:", err);
+          addToast(err.message || "AI Evaluation failed", "error");
+       } finally {
+          setEvaluatingId(null);
+       }
+    };
 
    const handleApproveMilestone = (milestoneId: string) => {
       setMilestones(prev =>
@@ -291,7 +408,8 @@ export function OwnedProjectDetails({ project, onBack }: OwnedProjectDetailsProp
    };
 
    const getStatusColor = (status: string) => {
-      switch (status) {
+      const s = status?.toLowerCase();
+      switch (s) {
          case "completed":
          case "approved": return "bg-emerald-50 text-emerald-600 border-emerald-100 ring-emerald-500/10";
          case "submitted": return "bg-sky-50 text-sky-600 border-sky-100 ring-sky-500/10";
@@ -588,27 +706,70 @@ export function OwnedProjectDetails({ project, onBack }: OwnedProjectDetailsProp
                                                 "px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest border",
                                                 getStatusColor(m.status)
                                              )}>
-                                                {m.status === "submitted" ? "Pending Approval" : m.status}
+                                                {(m.status?.toLowerCase() === "submitted" || m.githubLink) ? "Pending Approval" : m.status}
                                              </span>
                                           </div>
                                           <h3 className="text-2xl font-black text-slate-900 uppercase group-hover:text-indigo-600 transition-colors">{m.title}</h3>
                                           <p className="text-sm font-bold text-slate-500 max-w-xl leading-relaxed">{m.description}</p>
 
-                                          {/* Evidence Link Display */}
-                                          {(m.status === "submitted" || m.status === "approved" || m.status === "completed") && (
-                                             <div className="pt-4 flex flex-wrap gap-4 items-center">
-                                                {m.githubLink ? (
-                                                   <a href={`https://${m.githubLink}`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 px-6 py-3 rounded-2xl bg-slate-900 text-white text-[10px] font-black shadow-xl hover:scale-105 transition-all uppercase tracking-widest">
-                                                      <GithubIcon className="h-4 w-4" />
-                                                      {m.githubLink}
-                                                   </a>
-                                                ) : (
-                                                   <span className="text-xs font-bold text-slate-400 italic bg-slate-50 px-4 py-2 rounded-xl border border-slate-100">No link provided</span>
-                                                )}
-                                                
-                                                {m.status === "submitted" && (
-                                                   <div className="flex items-center gap-2 text-indigo-600 bg-indigo-50 px-4 py-2 rounded-xl border border-indigo-100 text-[10px] font-black uppercase tracking-widest">
-                                                      <Activity className="h-3 w-3" /> Needs Review
+                                          {/* High-Performance Submission Evidence Display */}
+                                          {(m.status?.toLowerCase() === "submitted" || m.status?.toLowerCase() === "approved" || m.status?.toLowerCase() === "completed" || m.githubLink) && (
+                                             <div className="pt-6 space-y-6">
+                                                <div className="flex flex-wrap gap-4 items-center">
+                                                   {m.githubLink ? (
+                                                      <a href={m.githubLink.startsWith('http') ? m.githubLink : `https://${m.githubLink}`} 
+                                                         target="_blank" 
+                                                         rel="noopener noreferrer" 
+                                                         className="flex items-center gap-3 px-6 py-3 rounded-2xl bg-slate-900 text-white text-[10px] font-black shadow-xl shadow-slate-900/10 hover:scale-105 active:scale-95 transition-all uppercase tracking-widest border border-slate-800 group/link"
+                                                      >
+                                                         <GithubIcon className="h-4 w-4 group-hover/link:rotate-12 transition-transform" />
+                                                         GitHub Repo
+                                                      </a>
+                                                   ) : (
+                                                      <div className="flex items-center gap-2 px-6 py-3 rounded-2xl bg-slate-50 border border-slate-100/50 text-[10px] font-black text-slate-400 uppercase tracking-widest opacity-60">
+                                                         <div className="h-1 w-1 rounded-full bg-slate-300" />
+                                                         No GitHub link
+                                                      </div>
+                                                   )}
+
+                                                   {m.demoLink ? (
+                                                      <a href={m.demoLink.startsWith('http') ? m.demoLink : `https://${m.demoLink}`} 
+                                                         target="_blank" 
+                                                         rel="noopener noreferrer" 
+                                                         className="flex items-center gap-3 px-6 py-3 rounded-2xl bg-indigo-600 text-white text-[10px] font-black shadow-xl shadow-indigo-600/10 hover:scale-105 active:scale-95 transition-all uppercase tracking-widest border border-indigo-500 group/link"
+                                                      >
+                                                         <Globe className="h-4 w-4 group-hover/link:animate-spin-slow" />
+                                                         Live Demo
+                                                      </a>
+                                                   ) : (
+                                                      <div className="flex items-center gap-2 px-6 py-3 rounded-2xl bg-slate-50 border border-slate-100/50 text-[10px] font-black text-slate-400 uppercase tracking-widest opacity-60">
+                                                         <div className="h-1 w-1 rounded-full bg-slate-300" />
+                                                         No demo link
+                                                      </div>
+                                                   )}
+                                                   
+                                                   {m.status?.toLowerCase() === "submitted" && !aiFeedback[m.id] && (
+                                                      <div className="relative overflow-hidden flex items-center gap-3 px-6 py-3 rounded-2xl bg-amber-50 text-amber-600 border border-amber-100 text-[10px] font-black uppercase tracking-widest shadow-sm shadow-amber-500/5 group/review">
+                                                         <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/40 to-transparent -translate-x-full group-hover:animate-[shimmer_1.5s_infinite]" style={{ animationDuration: '2s' }} />
+                                                         <Activity className="h-4 w-4 animate-pulse" />
+                                                         Awaiting Review
+                                                      </div>
+                                                   )}
+                                                </div>
+
+                                                {/* Freelancer Submission Notes */}
+                                                {m.submissionNotes && (
+                                                   <div className="relative p-6 rounded-[2.5rem] bg-slate-50/50 border border-slate-100 shadow-inner group/notes overflow-hidden">
+                                                      <div className="absolute top-0 left-0 w-1.5 h-full bg-indigo-500/20 group-hover/notes:bg-indigo-500 transition-colors" />
+                                                      <div className="flex items-center gap-3 mb-3">
+                                                         <div className="h-6 w-6 rounded-lg bg-white border border-slate-200 flex items-center justify-center shadow-sm">
+                                                            <MessageSquare className="h-3 w-3 text-slate-400" />
+                                                         </div>
+                                                         <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Submission Note</span>
+                                                      </div>
+                                                      <p className="text-sm font-bold text-slate-600 leading-relaxed italic pr-4">
+                                                         "{m.submissionNotes}"
+                                                      </p>
                                                    </div>
                                                 )}
                                              </div>
@@ -653,37 +814,52 @@ export function OwnedProjectDetails({ project, onBack }: OwnedProjectDetailsProp
                                              )}
                                           </div>
 
-                                          {m.status === "submitted" && (
-                                             <div className="w-full space-y-2 pt-2">
-                                                <button
-                                                   onClick={() => handleAIEvaluation(m.id)}
-                                                   disabled={evaluatingId === m.id}
-                                                   className="w-full h-12 rounded-2xl bg-white border border-indigo-200 text-indigo-600 text-[10px] font-black uppercase tracking-widest hover:bg-slate-50 transition-all flex items-center justify-center gap-2 disabled:opacity-50"
-                                                >
-                                                   {evaluatingId === m.id ? (
-                                                      <><Loader2 className="w-4 h-4 animate-spin" /> Analyzing Code...</>
-                                                   ) : (
-                                                      <><Sparkles className="w-4 h-4" /> Smart Code Audit</>
-                                                   )}
-                                                </button>
-                                                <div className="grid grid-cols-1 gap-2">
-                                                   <button
-                                                      onClick={() => handleApproveMilestone(m.id)}
-                                                      className="h-14 rounded-2xl bg-emerald-500 text-white text-xs font-black uppercase tracking-widest hover:scale-[1.02] active:scale-95 transition-all shadow-xl shadow-emerald-200 flex items-center justify-center gap-3"
-                                                   >
-                                                      <CheckCircle2 className="h-5 w-5" /> Approve & Pay
-                                                   </button>
-                                                   <button
-                                                      onClick={() => handleDisputeClick(m.id)}
-                                                      className="h-12 rounded-2xl bg-white border border-rose-200 text-rose-500 text-[10px] font-black uppercase tracking-widest hover:bg-rose-50 transition-all flex items-center justify-center gap-2"
-                                                   >
-                                                      <AlertCircle className="h-4 w-4" /> Raise Dispute
-                                                   </button>
-                                                </div>
+                                          {(m.status?.toLowerCase() === "submitted" || !!m.githubLink) && (
+                                             <div className="w-full space-y-3 pt-2">
+                                                {!aiFeedback[m.id] ? (
+                                                  <div className="grid grid-cols-1 gap-2">
+                                                     <button
+                                                        onClick={() => handleAIEvaluation(m.id)}
+                                                        disabled={evaluatingId === m.id}
+                                                        className="w-full h-14 rounded-2xl bg-slate-900 text-white text-[10px] font-black uppercase tracking-widest hover:scale-[1.02] active:scale-95 transition-all shadow-xl flex items-center justify-center gap-2 disabled:opacity-50"
+                                                     >
+                                                        {evaluatingId === m.id ? (
+                                                           <><Loader2 className="w-4 h-4 animate-spin" /> {getEvaluationMessage()}</>
+                                                        ) : (
+                                                           <><Sparkles className="w-4 h-4 text-amber-400" /> Evaluate with AI</>
+                                                        )}
+                                                     </button>
+                                                     <button
+                                                        onClick={() => handleDisputeClick(m.id)}
+                                                        className="h-12 rounded-2xl bg-white border border-rose-200 text-rose-500 text-[10px] font-black uppercase tracking-widest hover:bg-rose-50 transition-all flex items-center justify-center gap-2"
+                                                     >
+                                                        <AlertCircle className="h-4 w-4" /> Raise Dispute
+                                                     </button>
+                                                  </div>
+                                                ) : (
+                                                  <div className="space-y-3">
+                                                     <div className="p-4 rounded-2xl bg-emerald-50 border border-emerald-100 flex items-center justify-between">
+                                                        <span className="text-[10px] font-black text-emerald-600 uppercase tracking-widest">AI Readiness Score</span>
+                                                        <span className="text-xl font-black text-emerald-700">{aiFeedback[m.id].score}%</span>
+                                                     </div>
+                                                     <button
+                                                        onClick={() => handleApproveMilestone(m.id)}
+                                                        className="w-full h-14 rounded-2xl bg-emerald-500 text-white text-xs font-black uppercase tracking-widest hover:scale-[1.02] active:scale-95 transition-all shadow-xl shadow-emerald-200 flex items-center justify-center gap-3"
+                                                     >
+                                                        <CheckCircle2 className="h-5 w-5" /> Release Payment
+                                                     </button>
+                                                     <button
+                                                        onClick={() => handleDisputeClick(m.id)}
+                                                        className="h-12 rounded-2xl bg-white border border-rose-200 text-rose-500 text-[10px] font-black uppercase tracking-widest hover:bg-rose-50 transition-all flex items-center justify-center gap-2"
+                                                     >
+                                                        <AlertCircle className="h-4 w-4" /> Raise Dispute
+                                                     </button>
+                                                  </div>
+                                                )}
                                              </div>
                                           )}
 
-                                          {m.status === "approved" && (
+                                          {m.status?.toLowerCase() === "approved" && (
                                              <div className="w-full pt-2">
                                                 <button
                                                    onClick={() => handleReleasePayment(m.id)}
@@ -694,7 +870,7 @@ export function OwnedProjectDetails({ project, onBack }: OwnedProjectDetailsProp
                                              </div>
                                           )}
 
-                                          {m.status === "completed" && (
+                                          {m.status?.toLowerCase() === "completed" && (
                                              <div className="w-full pt-2 flex items-center justify-center gap-3 h-16 bg-emerald-50 text-emerald-600 rounded-[2rem] text-xs font-black uppercase tracking-widest border border-emerald-100">
                                                 <div className="h-8 w-8 rounded-full bg-emerald-100 flex items-center justify-center">
                                                    <CheckCircle2 className="h-5 w-5" />

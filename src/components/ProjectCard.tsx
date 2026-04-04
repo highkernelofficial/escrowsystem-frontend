@@ -38,7 +38,7 @@ export function ProjectCard({ project, onViewDetails }: ProjectCardProps) {
     },
   };
 
-  const theme = statusTheme[project.status];
+  const theme = statusTheme[project.status as keyof typeof statusTheme] || statusTheme.open;
 
   const itemVariants = {
     hidden: { opacity: 0, y: 20 },

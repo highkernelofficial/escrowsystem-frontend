@@ -90,7 +90,7 @@ export default function DashboardPage() {
           outcome: item.project.expectedOutcome || "",
           techStack: item.project.techStack || [],
           budget: `${item.project.totalAmount || 0} ALGO`,
-          status: (item.project.status?.toLowerCase() as any) || "open",
+          status: (item.project.status?.toLowerCase() === "created" ? "open" : item.project.status?.toLowerCase()) || "open",
           milestones: item.milestones || [],
           ownerId: item.project.clientId || "unknown",
         }));
