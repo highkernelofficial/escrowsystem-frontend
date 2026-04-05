@@ -123,7 +123,7 @@ export function PostProjectForm({ onSuccess, onCancel }: PostProjectFormProps) {
    const [step, setStep] = useState<"created" | "prepared" | "confirmed">("created");
 
    const { walletAddress, ensureInstance } = useWallet();
- 
+
    // Sync milestone percentages whenever budget changes
    useEffect(() => {
       const budget = toAlgoValue(formData.budget);

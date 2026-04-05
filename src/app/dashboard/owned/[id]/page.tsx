@@ -20,12 +20,12 @@ export default function OwnedProjectDetailPage() {
   useEffect(() => {
     const fetchProject = async () => {
       if (!id) return;
-      
+
       try {
         setIsLoading(true);
         const token = localStorage.getItem("auth_token");
         const fetchUrl = buildUrl(`/api/projects/me/owned/${id}/with-milestones`);
-        
+
         console.log(`🚀 [INIT] Fetching owned project detail for ID: ${id} from:`, fetchUrl);
 
         let response = await fetch(fetchUrl, {
@@ -37,7 +37,7 @@ export default function OwnedProjectDetailPage() {
 
         if (response.status === 403 || response.status === 401) {
           console.warn(`⚠️ [AUTH] Access denied to owned project ${id} (${response.status})`);
-          
+
           if (token) {
             console.error("🛑 [SESSION EXPIRED] Clearing auth token and resetting login state.");
             localStorage.removeItem("auth_token");
@@ -90,9 +90,9 @@ export default function OwnedProjectDetailPage() {
 
   if (!isConnected) {
     return (
-      <ProtectedView 
-        title="Project Management" 
-        description="To manage your project milestones and escrow funds, please connect your Pera Wallet." 
+      <ProtectedView
+        title="Project Management"
+        description="To manage your project milestones and escrow funds, please connect your Pera Wallet."
       />
     );
   }

@@ -46,8 +46,13 @@ export function MyWorkDetails({ project, onBack }: MyWorkDetailsProps) {
    const handleMilestoneSubmit = async (milestoneId: string) => {
       const data = submissions[milestoneId] || { githubLink: "", demoLink: "", description: "" };
 
-      if (!data.githubLink || !data.githubLink.trim()) {
-         addToast("Please provide a GitHub link", "error");
+      // Validate and normalize GitHub link
+      let githubLink = data.githubLink.trim();
+      if (githubLink && !githubLink.startsWith("http://") && !githubLink.startsWith("https://")) {
+         githubLink = `https://${githubLink}`;
+      }
+      if (!githubLink.toLowerCase().includes("github.com")) {
+         addToast("Please provide a valid GitHub repository URL (e.g., https://github.com/user/repo)", "error");
          return;
       }
 
@@ -61,7 +66,7 @@ export function MyWorkDetails({ project, onBack }: MyWorkDetailsProps) {
             milestoneId: milestoneId,   // CamelCase (from your example)
             milestone_id: milestoneId,  // snake_case (common Spring Boot/Go)
             id: milestoneId,            // Standard ID field
-            githubLink: data.githubLink.trim()
+            githubLink,
          };
 
          if (data.demoLink?.trim()) payload.demoLink = data.demoLink.trim();

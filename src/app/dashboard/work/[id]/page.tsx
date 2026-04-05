@@ -13,7 +13,7 @@ export default function MyWorkDetailPage() {
   const { isConnected, isLoggedIn, setIsLoggedIn } = useWalletAuth();
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
-  
+
   const [project, setProject] = useState<Project | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -27,7 +27,7 @@ export default function MyWorkDetailPage() {
         setError(null);
         const token = localStorage.getItem("auth_token");
         const fetchUrl = buildUrl(`/api/projects/me/workspace/${id}/with-milestones`);
-        
+
         console.log(`🚀 [INIT] Fetching Workspace Detail (ID: ${id})...`);
 
         const response = await fetch(fetchUrl, {
@@ -40,7 +40,7 @@ export default function MyWorkDetailPage() {
 
         if (response.status === 403 || response.status === 401) {
           console.warn(`⚠️ [AUTH] Access denied to work project ${id} (${response.status})`);
-          
+
           if (token) {
             console.error("🛑 [SESSION EXPIRED] Clearing auth token and resetting login state.");
             localStorage.removeItem("auth_token");
@@ -57,9 +57,9 @@ export default function MyWorkDetailPage() {
         }
 
         if (!response.ok) {
-           const logMsg = await response.text().catch(() => "N/A");
-           console.error("❌ [400 ERROR DEBUG] Body:", logMsg);
-           throw new Error(`Failed to load project details: ${response.status}`);
+          const logMsg = await response.text().catch(() => "N/A");
+          console.error("❌ [400 ERROR DEBUG] Body:", logMsg);
+          throw new Error(`Failed to load project details: ${response.status}`);
         }
 
         const data: ProjectWithMilestonesResponse = await response.json();
@@ -67,23 +67,23 @@ export default function MyWorkDetailPage() {
 
         // Map backend response to frontend Project interface
         const mappedProject: Project = {
-           id: data.project.id,
-           title: data.project.title,
-           description: data.project.description,
-           outcome: data.project.expectedOutcome || "",
-           techStack: data.project.techStack || [],
-           budget: `${data.project.totalAmount || 0} ALGO`,
-           status: (data.project.status?.toLowerCase() as any) || "assigned",
-           ownerId: data.project.clientId,
-           milestones: (data.milestones || []).map(m => ({
-              id: m.id,
-              title: m.title,
-              description: m.description,
-              amount: `${m.amount} ALGO`,
-              status: (m.status?.toLowerCase() as any) || "pending",
-              percentage: m.percentage,
-              githubLink: "" // Will be handled during submission
-           }))
+          id: data.project.id,
+          title: data.project.title,
+          description: data.project.description,
+          outcome: data.project.expectedOutcome || "",
+          techStack: data.project.techStack || [],
+          budget: `${data.project.totalAmount || 0} ALGO`,
+          status: (data.project.status?.toLowerCase() as any) || "assigned",
+          ownerId: data.project.clientId,
+          milestones: (data.milestones || []).map(m => ({
+            id: m.id,
+            title: m.title,
+            description: m.description,
+            amount: `${m.amount} ALGO`,
+            status: (m.status?.toLowerCase() as any) || "pending",
+            percentage: m.percentage,
+            githubLink: "" // Will be handled during submission
+          }))
         };
 
         setProject(mappedProject);
@@ -100,9 +100,9 @@ export default function MyWorkDetailPage() {
 
   if (!isConnected || !isLoggedIn) {
     return (
-      <ProtectedView 
-        title="Active Workspace" 
-        description="To track your project progress and submit milestones for payment, please connect your Pera Wallet." 
+      <ProtectedView
+        title="Active Workspace"
+        description="To track your project progress and submit milestones for payment, please connect your Pera Wallet."
       />
     );
   }
