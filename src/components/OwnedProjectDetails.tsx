@@ -479,11 +479,11 @@ export function OwnedProjectDetails({ project, onBack }: OwnedProjectDetailsProp
             }
          });
 
-         // Step 3: Sign with Pera Wallet (Sign all as a group if multiple)
+         // Step 3: Sign with Pera Wallet
          const peraWallet = ensureInstance();
          if (!peraWallet) throw new Error("Pera Wallet not initialized");
 
-         // Pera expects an array of groups: [ [ {txn, signers}, ... ] ]
+         // Build Pera sign request — single group containing all txns
          const signGroup = decodedTxns.map(txn => {
             const senderAddr = algosdk.encodeAddress(txn.sender.publicKey);
             const isUserSender = senderAddr.toLowerCase() === walletAddress?.toLowerCase();
@@ -500,16 +500,39 @@ export function OwnedProjectDetails({ project, onBack }: OwnedProjectDetailsProp
             throw new Error("Transaction signing was rejected or failed");
          }
 
-         // Step 4: Submit signed txns to Algorand network
+         // Step 4: Submit sequentially — approve first, then release
+         // Algorand doesn't share state between grouped txns, so we must
+         // submit approve, wait for it to confirm (status=3), then submit release.
          const algodClient = new algosdk.Algodv2("", "https://testnet-api.algonode.cloud", "");
-         const submitResponse = await algodClient.sendRawTransaction(signedTxns).do();
-         const txId = (submitResponse as any).txId || (submitResponse as any).txid;
-         console.log(`🚀 [RELEASE] Submitted to Algorand. txId: ${txId}`);
 
-         // Step 5: Wait for on-chain confirmation
-         console.log(`⏳ [RELEASE] Waiting for on-chain confirmation...`);
-         await algosdk.waitForConfirmation(algodClient, txId, 4);
-         console.log(`✅ [RELEASE] Confirmed on-chain!`);
+         let txId: string;
+         if (signedTxns.length >= 2) {
+            // 4a: Submit APPROVE transaction
+            console.log(`🚀 [RELEASE] Submitting APPROVE transaction (1/${signedTxns.length})...`);
+            const approveResponse = await algodClient.sendRawTransaction(signedTxns[0]).do();
+            const approveTxId = (approveResponse as any).txId || (approveResponse as any).txid;
+            console.log(`⏳ [RELEASE] Waiting for APPROVE confirmation... txId: ${approveTxId}`);
+            await algosdk.waitForConfirmation(algodClient, approveTxId, 4);
+            console.log(`✅ [RELEASE] APPROVE confirmed on-chain!`);
+
+            // 4b: Submit RELEASE transaction
+            console.log(`🚀 [RELEASE] Submitting RELEASE transaction (2/${signedTxns.length})...`);
+            const releaseResponse = await algodClient.sendRawTransaction(signedTxns[1]).do();
+            const releaseTxId = (releaseResponse as any).txId || (releaseResponse as any).txid;
+            console.log(`⏳ [RELEASE] Waiting for RELEASE confirmation... txId: ${releaseTxId}`);
+            await algosdk.waitForConfirmation(algodClient, releaseTxId, 4);
+            console.log(`✅ [RELEASE] RELEASE confirmed on-chain!`);
+
+            txId = releaseTxId;
+         } else {
+            // Single transaction fallback (e.g. approve_and_release in new contracts)
+            console.log(`🚀 [RELEASE] Submitting single transaction...`);
+            const submitResponse = await algodClient.sendRawTransaction(signedTxns[0]).do();
+            txId = (submitResponse as any).txId || (submitResponse as any).txid;
+            console.log(`⏳ [RELEASE] Waiting for on-chain confirmation... txId: ${txId}`);
+            await algosdk.waitForConfirmation(algodClient, txId, 4);
+            console.log(`✅ [RELEASE] Confirmed on-chain!`);
+         }
 
          // Step 6: Confirm with backend
          console.log(`🚀 [RELEASE] Confirming release for milestone: ${milestoneId}...`);
@@ -586,7 +609,7 @@ export function OwnedProjectDetails({ project, onBack }: OwnedProjectDetailsProp
                "ngrok-skip-browser-warning": "true",
                ...(token ? { Authorization: `Bearer ${token}` } : {}),
             },
-            body: JSON.stringify({ milestoneId: (milestones.find(m => m.status === 'pending') || milestones[0])?.id }),
+            // No body needed — backend fetches ALL milestones for the project automatically
          });
 
          if (!response.ok) {
@@ -691,7 +714,6 @@ export function OwnedProjectDetails({ project, onBack }: OwnedProjectDetailsProp
             projectId: project.id,
             txnHash: prepareTxnHash,
          };
-
          console.log(`🚀 [FUND] Confirming fund for project: ${project.id}...`, requestBody);
 
          const response = await fetch(fetchUrl, {
@@ -1171,6 +1193,22 @@ export function OwnedProjectDetails({ project, onBack }: OwnedProjectDetailsProp
 
                                                 {(m.status?.toLowerCase() === "submitted" || !!m.githubLink) && (
                                                    <div className="w-full space-y-3 pt-2">
+                                                      {/* Always show Release Payment button if submitted/has link */}
+                                                      <button
+                                                         onClick={() => handleApproveMilestone(m.id)}
+                                                         disabled={releasingMilestoneId !== null}
+                                                         className={cn(
+                                                            "w-full h-14 rounded-2xl text-white text-xs font-black uppercase tracking-widest hover:scale-[1.02] active:scale-95 transition-all shadow-xl flex items-center justify-center gap-3 disabled:opacity-50",
+                                                            (!aiFeedback[m.id] || aiFeedback[m.id].approved) ? "bg-emerald-500 shadow-emerald-200" : "bg-slate-900 shadow-slate-200"
+                                                         )}
+                                                      >
+                                                         {releasingMilestoneId === m.id ? (
+                                                            <><Loader2 className="h-5 w-5 animate-spin" /> Releasing...</>
+                                                         ) : (
+                                                            <><CheckCircle2 className="h-5 w-5" /> Release Payment</>
+                                                         )}
+                                                      </button>
+
                                                       {!aiFeedback[m.id] ? (
                                                          <div className="grid grid-cols-1 gap-2">
                                                             <button
@@ -1184,59 +1222,35 @@ export function OwnedProjectDetails({ project, onBack }: OwnedProjectDetailsProp
                                                                   <><Sparkles className="w-4 h-4 text-amber-400" /> Evaluate with AI</>
                                                                )}
                                                             </button>
-                                                            <button
-                                                               onClick={() => handleDisputeClick(m.id)}
-                                                               className="h-12 rounded-2xl bg-white border border-rose-200 text-rose-500 text-[10px] font-black uppercase tracking-widest hover:bg-rose-50 transition-all flex items-center justify-center gap-2"
-                                                            >
-                                                               <AlertCircle className="h-4 w-4" /> Raise Dispute
-                                                            </button>
                                                          </div>
                                                       ) : (
-                                                         <div className="space-y-3">
-                                                            <div className={cn(
-                                                               "p-4 rounded-2xl flex items-center justify-between",
-                                                               aiFeedback[m.id].approved
-                                                                  ? "bg-emerald-50 border border-emerald-100"
-                                                                  : "bg-rose-50 border border-rose-100"
+                                                         <div className={cn(
+                                                            "p-4 rounded-2xl flex items-center justify-between",
+                                                            aiFeedback[m.id].approved
+                                                               ? "bg-emerald-50 border border-emerald-100"
+                                                               : "bg-rose-50 border border-rose-100"
+                                                         )}>
+                                                            <span className={cn(
+                                                               "text-[10px] font-black uppercase tracking-widest",
+                                                               aiFeedback[m.id].approved ? "text-emerald-600" : "text-rose-600"
                                                             )}>
-                                                               <span className={cn(
-                                                                  "text-[10px] font-black uppercase tracking-widest",
-                                                                  aiFeedback[m.id].approved ? "text-emerald-600" : "text-rose-600"
-                                                               )}>
-                                                                  {aiFeedback[m.id].approved ? "AI Approved" : "AI Rejected"} — Score
-                                                               </span>
-                                                               <span className={cn(
-                                                                  "text-xl font-black",
-                                                                  aiFeedback[m.id].approved ? "text-emerald-700" : "text-rose-700"
-                                                               )}>
-                                                                  {aiFeedback[m.id].score}%
-                                                               </span>
-                                                            </div>
-                                                            {aiFeedback[m.id].approved ? (
-                                                               <button
-                                                                  onClick={() => handleApproveMilestone(m.id)}
-                                                                  disabled={releasingMilestoneId !== null}
-                                                                  className="w-full h-14 rounded-2xl bg-emerald-500 text-white text-xs font-black uppercase tracking-widest hover:scale-[1.02] active:scale-95 transition-all shadow-xl shadow-emerald-200 flex items-center justify-center gap-3 disabled:opacity-50"
-                                                               >
-                                                                  {releasingMilestoneId === m.id ? (
-                                                                     <><Loader2 className="h-5 w-5 animate-spin" /> Releasing...</>
-                                                                  ) : (
-                                                                     <><CheckCircle2 className="h-5 w-5" /> Release Payment</>
-                                                                  )}
-                                                               </button>
-                                                            ) : (
-                                                               <div className="w-full h-14 rounded-2xl bg-rose-50 border border-rose-200 text-rose-600 text-xs font-black uppercase tracking-widest flex items-center justify-center gap-2">
-                                                                  <AlertCircle className="h-4 w-4" /> AI Rejected — Payment Blocked
-                                                               </div>
-                                                            )}
-                                                            <button
-                                                               onClick={() => handleDisputeClick(m.id)}
-                                                               className="h-12 rounded-2xl bg-white border border-rose-200 text-rose-500 text-[10px] font-black uppercase tracking-widest hover:bg-rose-50 transition-all flex items-center justify-center gap-2"
-                                                            >
-                                                               <AlertCircle className="h-4 w-4" /> Raise Dispute
-                                                            </button>
+                                                               {aiFeedback[m.id].approved ? "AI Approved" : "AI Rejected"} — Score
+                                                            </span>
+                                                            <span className={cn(
+                                                               "text-xl font-black",
+                                                               aiFeedback[m.id].approved ? "text-emerald-700" : "text-rose-700"
+                                                            )}>
+                                                               {aiFeedback[m.id].score}%
+                                                            </span>
                                                          </div>
                                                       )}
+
+                                                      <button
+                                                         onClick={() => handleDisputeClick(m.id)}
+                                                         className="w-full h-12 rounded-2xl bg-white border border-rose-200 text-rose-500 text-[10px] font-black uppercase tracking-widest hover:bg-rose-50 transition-all flex items-center justify-center gap-2"
+                                                      >
+                                                         <AlertCircle className="h-4 w-4" /> Raise Dispute
+                                                      </button>
                                                    </div>
                                                 )}
 
