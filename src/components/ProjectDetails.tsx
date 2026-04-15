@@ -33,8 +33,13 @@ export function ProjectDetails({ project, onBack, isOwner = false }: ProjectDeta
   const isFunded = !!project.fundingTxnHash;
 
   // Simple calculation for progress bar
-  const approvedMilestones = project.milestones.filter(m => m.status === "approved").length;
-  const progressPercent = Math.round((approvedMilestones / project.milestones.length) * 100);
+  const completedMilestonesCount = project.milestones.filter(m => {
+    const s = m.status?.toLowerCase();
+    return s === "completed" || s === "approved" || s === "paid" || !!m.txnHash;
+  }).length;
+  const progressPercent = project.milestones.length > 0 
+    ? Math.round((completedMilestonesCount / project.milestones.length) * 100) 
+    : 0;
 
   const getStatusColor = (status: MilestoneStatus) => {
     switch (status) {
@@ -72,7 +77,7 @@ export function ProjectDetails({ project, onBack, isOwner = false }: ProjectDeta
       variants={containerVariants}
       initial={false}
       animate="show"
-      className="mx-auto max-w-5xl space-y-8 pb-20 px-4"
+      className="mx-auto max-w-5xl space-y-6 md:space-y-8 pb-20 px-4 md:px-0"
     >
       {/* Top Navigation */}
       <motion.button
@@ -87,11 +92,11 @@ export function ProjectDetails({ project, onBack, isOwner = false }: ProjectDeta
       </motion.button>
 
       {/* HEADER SECTION */}
-      <motion.div variants={itemVariants} className="relative rounded-[3rem] bg-white p-1 shadow-2xl shadow-slate-200/50 overflow-hidden group">
+      <motion.div variants={itemVariants} className="relative rounded-3xl md:rounded-[3rem] bg-white p-1 shadow-2xl shadow-slate-200/50 overflow-hidden group">
         {/* Gradient Border Backdrop */}
         <div className="absolute inset-0 bg-gradient-to-r from-rose-400 via-sky-400 to-emerald-400 opacity-20 group-hover:opacity-40 transition-opacity duration-700" />
 
-        <div className="relative rounded-[2.8rem] bg-white p-8 md:p-12 overflow-hidden">
+        <div className="relative rounded-[1.4rem] md:rounded-[2.8rem] bg-white p-6 md:p-12 overflow-hidden">
           {/* Abstract Background Accents */}
           <div className="absolute -top-24 -right-24 h-64 w-64 rounded-full bg-indigo-50/50 blur-3xl" />
           <div className="absolute top-1/2 -left-24 h-48 w-48 rounded-full bg-emerald-50/50 blur-3xl -translate-y-1/2" />
@@ -113,11 +118,11 @@ export function ProjectDetails({ project, onBack, isOwner = false }: ProjectDeta
                     Funds Locked in Escrow
                   </div>
                 </div>
-                <h1 className="text-4xl md:text-5xl font-black tracking-tight text-slate-950 leading-tight">
+                <h1 className="text-2xl md:text-5xl font-black tracking-tight text-slate-950 leading-tight">
                   {project.title}
                 </h1>
               </div>
-              <div className="flex flex-col items-end gap-2 bg-slate-50 border border-slate-100 p-6 rounded-[2rem] min-w-[180px] shadow-sm">
+              <div className="flex flex-col items-start md:items-end gap-2 bg-slate-50 border border-slate-100 p-4 md:p-6 rounded-2xl md:rounded-[2rem] w-full md:min-w-[180px] shadow-sm">
                 <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Total Budget</span>
                 <div className="flex items-center gap-3">
                   <div className="h-8 w-8 rounded-full bg-gradient-to-br from-indigo-500 to-sky-500 flex items-center justify-center text-white text-xs font-black shadow-lg shadow-indigo-200">A</div>
@@ -134,7 +139,7 @@ export function ProjectDetails({ project, onBack, isOwner = false }: ProjectDeta
             <div className="space-y-3">
               <div className="flex justify-between items-end">
                 <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Project Progress</p>
-                <p className="text-sm font-black text-slate-900">{approvedMilestones} of {project.milestones.length} Milestones Complete</p>
+                <p className="text-sm font-black text-slate-900">{completedMilestonesCount} of {project.milestones.length} Milestones Complete</p>
               </div>
               <div className="h-4 w-full bg-slate-100 rounded-full overflow-hidden p-1">
                 <motion.div
@@ -149,11 +154,11 @@ export function ProjectDetails({ project, onBack, isOwner = false }: ProjectDeta
         </div>
       </motion.div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 md:gap-8">
         {/* LEFT COLUMN: Project Info */}
         <div className="lg:col-span-2 space-y-8">
           {/* DESCRIPTION */}
-          <motion.section variants={itemVariants} className="rounded-[2.5rem] bg-white border border-slate-100 p-8 md:p-10 shadow-xl shadow-slate-100/50 space-y-6">
+          <motion.section variants={itemVariants} className="rounded-3xl md:rounded-[2.5rem] bg-white border border-slate-100 p-6 md:p-10 shadow-xl shadow-slate-100/50 space-y-6">
             <div className="flex items-center gap-3">
               <div className="h-10 w-10 rounded-xl bg-slate-50 flex items-center justify-center text-slate-500 border border-slate-100">
                 <Briefcase className="h-5 w-5" />
@@ -209,23 +214,23 @@ export function ProjectDetails({ project, onBack, isOwner = false }: ProjectDeta
             </div>
 
             <div className="space-y-4 relative">
-              <div className="absolute left-10 top-0 bottom-0 w-0.5 bg-slate-100" />
+              <div className="absolute left-4 md:left-10 top-0 bottom-0 w-0.5 bg-slate-100" />
               {project.milestones.map((m, i) => (
                 <motion.div
                   key={m.id}
                   variants={itemVariants}
                   whileHover={{ x: 10, transition: { duration: 0.2 } }}
-                  className="relative group ml-4"
+                  className="relative group ml-0 md:ml-4"
                 >
                   {/* Circle Dot */}
                   <div className={cn(
-                    "absolute -left-6 top-8 h-4 w-4 rounded-full border-2 border-white shadow-md z-10",
+                    "absolute -left-6 md:-left-6 top-8 h-4 w-4 rounded-full border-2 border-white shadow-md z-10",
                     m.status === "approved" ? "bg-emerald-500" : m.status === "pending" ? "bg-slate-300" : "bg-sky-500"
                   )} />
 
-                  <div className="ml-10 relative overflow-hidden rounded-3xl border border-slate-100 bg-white p-8 shadow-lg shadow-slate-100 group-hover:border-indigo-200 transition-all">
+                  <div className="ml-8 md:ml-10 relative overflow-hidden rounded-2xl md:rounded-3xl border border-slate-100 bg-white p-6 md:p-8 shadow-lg shadow-slate-100 group-hover:border-indigo-200 transition-all">
                     {/* Ghost Index Number */}
-                    <div className="absolute -right-4 -bottom-6 text-8xl font-black text-slate-50 pointer-events-none select-none">
+                    <div className="hidden md:block absolute -right-4 -bottom-6 text-8xl font-black text-slate-50 pointer-events-none select-none">
                       0{i + 1}
                     </div>
 
@@ -270,7 +275,7 @@ export function ProjectDetails({ project, onBack, isOwner = false }: ProjectDeta
         {/* RIGHT COLUMN: Actions & Stakeholders */}
         <div className="space-y-8">
           {/* ACTION CARD */}
-          <motion.section variants={itemVariants} className="sticky top-28 rounded-[2.5rem] bg-slate-900 p-8 text-white shadow-2xl shadow-indigo-200/40 overflow-hidden group">
+          <motion.section variants={itemVariants} className="lg:sticky lg:top-28 rounded-3xl md:rounded-[2.5rem] bg-slate-900 p-6 md:p-8 text-white shadow-2xl shadow-indigo-200/40 overflow-hidden group">
             <Sparkles className="absolute -top-4 -right-4 h-24 w-24 text-white/5 rotate-12 group-hover:scale-125 transition-transform duration-700" />
 
             <div className="relative z-10 space-y-8">
@@ -285,7 +290,7 @@ export function ProjectDetails({ project, onBack, isOwner = false }: ProjectDeta
                   <button
                     onClick={connectWallet}
                     disabled={isLoading}
-                    className="w-full flex items-center justify-center gap-3 h-16 rounded-2xl font-extrabold shadow-xl transition-all outline-none ring-offset-2 bg-white text-slate-900 hover:scale-[1.02] active:scale-95 border-2 border-slate-700/10 hover:border-sky-400 group/connect"
+                    className="w-full flex items-center justify-center gap-3 h-14 md:h-16 rounded-xl md:rounded-2xl font-extrabold shadow-xl transition-all outline-none ring-offset-2 bg-white text-slate-900 hover:scale-[1.02] active:scale-95 border-2 border-slate-700/10 hover:border-sky-400 group/connect"
                   >
                     {isLoading ? (
                       <>
@@ -304,7 +309,7 @@ export function ProjectDetails({ project, onBack, isOwner = false }: ProjectDeta
                     onClick={() => isFunded && isOpen && setIsApplyModalOpen(true)}
                     disabled={!isFunded || !isOpen}
                     className={cn(
-                      "w-full flex items-center justify-center gap-3 h-16 rounded-2xl font-extrabold shadow-xl transition-all outline-none ring-offset-2",
+                      "w-full flex items-center justify-center gap-3 h-14 md:h-16 rounded-xl md:rounded-2xl font-extrabold shadow-xl transition-all outline-none ring-offset-2",
                       (isFunded && isOpen)
                         ? "bg-gradient-to-r from-indigo-500 to-sky-500 text-white hover:scale-[1.02] active:scale-95 focus:ring-4 focus:ring-indigo-500/20"
                         : "bg-slate-200 text-slate-400 cursor-not-allowed shadow-none"

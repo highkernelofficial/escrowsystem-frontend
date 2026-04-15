@@ -71,7 +71,8 @@ export default function ProjectDetailPage() {
             amount: m.amount, // Backend uses amount (number)
             status: m.status,
             percentage: m.percentage,
-            createdAt: m.createdAt
+            createdAt: m.createdAt,
+            txnHash: m.txnHash
           })),
           fundingTxnHash: (data.project as any).fundingTxnHash || (data.project as any).funding_txn_hash || null,
         };

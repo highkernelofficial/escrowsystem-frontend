@@ -1,5 +1,15 @@
 export type ProjectStatus = "open" | "assigned" | "completed";
-export type MilestoneStatus = "pending" | "submitted" | "approved" | "dispute" | "reassigned" | "completed" | "assigned";
+export type MilestoneStatus = "pending" | "submitted" | "approved" | "dispute" | "disputed" | "reassigned" | "completed" | "assigned";
+
+export interface DisputeRecord {
+  id: string;
+  milestoneId: string;
+  clientId: string;
+  freelancerId: string;
+  reason: string;
+  status: string; // OPEN | UNDER_REVIEW | RESOLVED | REJECTED
+  createdAt: string;
+}
 
 export interface Milestone {
   id: string;
@@ -13,6 +23,7 @@ export interface Milestone {
   submissionNotes?: string;
   submissionId?: string;
   createdAt?: string;
+  txnHash?: string;
 }
 
 export interface Freelancer {
@@ -47,6 +58,7 @@ export interface BackendMilestone {
   reassignmentReason: string;
   percentage: number;
   createdAt: string;
+  txnHash?: string;
 }
 
 export interface ProjectWithMilestonesResponse {

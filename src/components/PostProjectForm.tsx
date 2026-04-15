@@ -627,7 +627,7 @@ export function PostProjectForm({ onSuccess, onCancel }: PostProjectFormProps) {
                   </div>
                </div>
             </div>
-            <h1 className="text-5xl font-black tracking-tight text-slate-900 drop-shadow-sm">
+            <h1 className="text-3xl md:text-5xl font-black tracking-tight text-slate-900 drop-shadow-sm">
                Intelligent{" "}
                <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-500 via-sky-500 to-emerald-500">
                   Project Engine
@@ -647,7 +647,7 @@ export function PostProjectForm({ onSuccess, onCancel }: PostProjectFormProps) {
                   <h2 className="text-xl font-black text-slate-900">Project Information</h2>
                </div>
 
-               <div className="rounded-[2.5rem] border border-slate-100 bg-white/80 p-8 shadow-xl shadow-slate-200/40 backdrop-blur-xl">
+               <div className="rounded-3xl md:rounded-[2.5rem] border border-slate-100 bg-white/80 p-5 md:p-8 shadow-xl shadow-slate-200/40 backdrop-blur-xl">
                   <div className="space-y-6">
                      <div className="space-y-2">
                         <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">
@@ -704,7 +704,7 @@ export function PostProjectForm({ onSuccess, onCancel }: PostProjectFormProps) {
                   <h2 className="text-xl font-black text-slate-900">Tech & Outcome</h2>
                </div>
 
-               <div className="rounded-[2.5rem] border border-slate-100 bg-white/80 p-8 shadow-xl shadow-slate-200/40 backdrop-blur-xl">
+               <div className="rounded-3xl md:rounded-[2.5rem] border border-slate-100 bg-white/80 p-5 md:p-8 shadow-xl shadow-slate-200/40 backdrop-blur-xl">
                   <div className="space-y-8">
                      <div className="space-y-4">
                         <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">
@@ -786,7 +786,7 @@ export function PostProjectForm({ onSuccess, onCancel }: PostProjectFormProps) {
                   <h2 className="text-xl font-black text-slate-900">Project Economics</h2>
                </div>
 
-               <div className="rounded-[2.5rem] border border-slate-100 bg-white/80 p-8 shadow-xl shadow-slate-200/40 backdrop-blur-xl">
+               <div className="rounded-3xl md:rounded-[2.5rem] border border-slate-100 bg-white/80 p-5 md:p-8 shadow-xl shadow-slate-200/40 backdrop-blur-xl">
                   <div className="space-y-2">
                      <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">
                         Total Budget (in ALGO)
@@ -798,7 +798,7 @@ export function PostProjectForm({ onSuccess, onCancel }: PostProjectFormProps) {
                            placeholder="0.00"
                            value={formData.budget}
                            onChange={(e) => setFormData({ ...formData, budget: e.target.value })}
-                           className="w-full rounded-2xl border-2 border-slate-200 bg-white px-6 py-5 text-xl font-black text-slate-950 placeholder:text-slate-400/60 focus:border-amber-400 focus:ring-4 focus:ring-amber-50 focus:outline-none transition-all shadow-inner"
+                           className="w-full rounded-2xl border-2 border-slate-200 bg-white px-6 py-4 md:py-5 text-lg md:text-xl font-black text-slate-950 placeholder:text-slate-400/60 focus:border-amber-400 focus:ring-4 focus:ring-amber-50 focus:outline-none transition-all shadow-inner"
                         />
                         <div className="absolute right-6 top-1/2 -translate-y-1/2 flex items-center gap-2">
                            <div className="h-8 w-8 rounded-full bg-amber-500 flex items-center justify-center text-white text-[10px] font-black shadow-lg shadow-amber-200">
@@ -823,13 +823,13 @@ export function PostProjectForm({ onSuccess, onCancel }: PostProjectFormProps) {
                   <button
                      type="button"
                      onClick={generateProjectPlan}
-                     className="w-full rounded-[2.5rem] bg-indigo-600 py-8 text-white font-black text-lg shadow-2xl shadow-indigo-100 flex items-center justify-center gap-3 group border-b-8 border-indigo-800 active:border-b-0 active:translate-y-1 transition-all"
+                     className="w-full rounded-3xl md:rounded-[2.5rem] bg-indigo-600 py-6 md:py-8 text-white font-black text-base md:text-lg shadow-2xl shadow-indigo-100 flex items-center justify-center gap-3 group border-b-8 border-indigo-800 active:border-b-0 active:translate-y-1 transition-all"
                   >
                      <Sparkles className="h-6 w-6 text-indigo-300 animate-pulse" />
                      Generate Project Plan with AI
                   </button>
                ) : isGeneratingPlan ? (
-                  <div className="rounded-[2.5rem] bg-white border border-slate-100 p-12 text-center space-y-6 shadow-xl relative overflow-hidden">
+                  <div className="rounded-3xl md:rounded-[2.5rem] bg-white border border-slate-100 p-6 md:p-12 text-center space-y-6 shadow-xl relative overflow-hidden">
                      <div className="absolute top-0 left-0 w-full h-1.5 bg-slate-50 overflow-hidden">
                         <motion.div
                            initial={{ x: "-100%" }}
@@ -874,7 +874,7 @@ export function PostProjectForm({ onSuccess, onCancel }: PostProjectFormProps) {
                                     initial={{ opacity: 0, scale: 0.9 }}
                                     animate={{ opacity: 1, scale: 1 }}
                                     exit={{ opacity: 0, scale: 0.9 }}
-                                    className="group relative rounded-3xl border border-slate-100 bg-white/80 p-6 shadow-lg shadow-slate-100 hover:border-indigo-100 transition-all"
+                                    className="group relative rounded-3xl border border-slate-100 bg-white/80 p-4 md:p-6 shadow-lg shadow-slate-100 hover:border-indigo-100 transition-all"
                                  >
                                     <div className="flex items-start justify-between gap-4">
                                        <div className="h-8 w-8 rounded-lg bg-slate-900 text-white flex-shrink-0 flex items-center justify-center text-[10px] font-black relative overflow-hidden group-hover:bg-indigo-600 transition-colors">
@@ -887,7 +887,7 @@ export function PostProjectForm({ onSuccess, onCancel }: PostProjectFormProps) {
 
                                        <div className="flex-1 space-y-3">
                                           <input
-                                             className="w-full text-lg font-black text-slate-950 bg-white rounded-xl border-2 border-slate-200 px-3 py-1.5 focus:outline-none focus:border-indigo-400 transition-all mb-1 shadow-sm"
+                                             className="w-full text-base md:text-lg font-black text-slate-950 bg-white rounded-xl border-2 border-slate-200 px-3 py-1.5 focus:outline-none focus:border-indigo-400 transition-all mb-1 shadow-sm"
                                              value={m.title}
                                              onChange={(e) => updateMilestone(m.id, "title", e.target.value)}
                                           />
@@ -898,13 +898,15 @@ export function PostProjectForm({ onSuccess, onCancel }: PostProjectFormProps) {
                                              onChange={(e) => updateMilestone(m.id, "description", e.target.value)}
                                           />
 
-                                          <div className="flex items-center gap-2">
-                                             <Coins className="h-3 w-3 text-amber-500" />
-                                             <input
-                                                className="text-[10px] font-black text-amber-700 bg-amber-50 rounded-md px-2 py-1 border border-amber-200 focus:outline-none focus:border-amber-400 w-32 shadow-sm"
-                                                value={m.amount}
-                                                onChange={(e) => updateMilestone(m.id, "amount", e.target.value)}
-                                             />
+                                          <div className="flex flex-wrap items-center gap-2">
+                                             <div className="flex items-center gap-2">
+                                                <Coins className="h-3 w-3 text-amber-500" />
+                                                <input
+                                                   className="text-[10px] font-black text-amber-700 bg-amber-50 rounded-md px-2 py-1 border border-amber-200 focus:outline-none focus:border-amber-400 w-28 md:w-32 shadow-sm"
+                                                   value={m.amount}
+                                                   onChange={(e) => updateMilestone(m.id, "amount", e.target.value)}
+                                                />
+                                             </div>
                                              {m.percentage !== undefined && m.percentage > 0 && (
                                                 <div className="flex items-center gap-1.5 px-3 py-1 rounded-lg bg-indigo-50 border border-indigo-100">
                                                    <Sparkles className="h-3 w-3 text-indigo-500" />
@@ -931,11 +933,11 @@ export function PostProjectForm({ onSuccess, onCancel }: PostProjectFormProps) {
                )}
             </motion.section>
 
-            <motion.section variants={itemVariants} className="pt-10 flex gap-4">
+            <motion.section variants={itemVariants} className="pt-10 flex flex-col-reverse sm:flex-row gap-4">
                <button
                   type="button"
                   onClick={onCancel}
-                  className="h-20 rounded-[2.5rem] bg-white text-slate-500 font-extrabold px-10 shadow-lg shadow-slate-100 transition-all hover:bg-slate-50 active:scale-95"
+                  className="h-16 md:h-20 rounded-3xl md:rounded-[2.5rem] bg-white text-slate-500 font-extrabold px-10 shadow-lg shadow-slate-100 transition-all hover:bg-slate-50 active:scale-95"
                >
                   Cancel
                </button>
@@ -943,7 +945,7 @@ export function PostProjectForm({ onSuccess, onCancel }: PostProjectFormProps) {
                <button
                   type="submit"
                   disabled={isSubmitting}
-                  className="flex-1 group relative h-20 overflow-hidden rounded-[2.5rem] bg-slate-900 text-white font-extrabold shadow-2xl shadow-indigo-200 transition-all active:scale-95 disabled:grayscale"
+                  className="flex-1 group relative h-16 md:h-20 overflow-hidden rounded-3xl md:rounded-[2.5rem] bg-slate-900 text-white font-extrabold shadow-2xl shadow-indigo-200 transition-all active:scale-95 disabled:grayscale"
                >
                   <div
                      className={cn(
@@ -960,7 +962,7 @@ export function PostProjectForm({ onSuccess, onCancel }: PostProjectFormProps) {
                         </>
                      ) : (
                         <>
-                           <span className="text-xl">Create Decentralized Project</span>
+                           <span className="text-lg md:text-xl">Create Decentralized Project</span>
                            <ArrowRight className="h-6 w-6 group-hover:translate-x-2 transition-transform" />
                         </>
                      )}

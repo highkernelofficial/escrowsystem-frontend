@@ -41,6 +41,7 @@ export function useWalletAuth() {
 
     setIsLoading(true);
     setError(null);
+    console.log("🔐 [AUTH] Starting login process for wallet:", walletAddress);
 
     try {
       // ── Step 1: Fetch nonce from backend ──────────────────────────

@@ -18,7 +18,7 @@ export function About() {
   };
 
   return (
-    <section id="aboutus" className="py-24 bg-white relative overflow-hidden">
+    <section id="aboutus" className="py-16 sm:py-24 bg-white relative overflow-hidden">
       {/* Decorative light background elements */}
       <div className="absolute top-0 right-0 -z-10 w-full h-full bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-blue-50/50 via-white to-white" />
       <div className="absolute bottom-0 left-0 -z-10 w-full h-full bg-[radial-gradient(ellipse_at_bottom_left,_var(--tw-gradient-stops))] from-rose-50/50 via-white to-white" />
@@ -29,7 +29,7 @@ export function About() {
            whileInView={{ opacity: 1, y: 0 }}
            viewport={{ once: true, margin: "-100px" }}
            transition={{ duration: 0.6 }}
-           className="text-center max-w-3xl mx-auto mb-24"
+           className="text-center max-w-3xl mx-auto mb-16 sm:mb-24 px-4"
         >
           <span className="text-sm font-black tracking-[0.2em] text-rose-500 uppercase mb-5 block drop-shadow-sm inline-flex items-center gap-2 bg-rose-50 px-4 py-1.5 rounded-full border border-rose-100 shadow-[0_4px_15px_rgba(244,63,94,0.15)]">Platform Core Pillars</span>
           <h2 className="text-4xl font-extrabold tracking-tight text-slate-900 sm:text-5xl md:text-6xl drop-shadow-sm">

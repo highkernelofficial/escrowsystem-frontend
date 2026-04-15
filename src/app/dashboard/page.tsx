@@ -11,20 +11,21 @@ import { buildUrl } from "@/config/api";
 import {
   Search, ArrowRight, Briefcase, Loader2, RefreshCw
 } from "lucide-react";
+import { useSearch } from "@/context/SearchContext";
 
 export default function DashboardPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { 
-    isConnected, 
-    walletAddress, 
-    isLoggedIn, 
-    setIsLoggedIn, 
-    login, 
-    isLoading: authLoading 
+  const {
+    isConnected,
+    walletAddress,
+    isLoggedIn,
+    setIsLoggedIn,
+    login,
+    isLoading: authLoading
   } = useWalletAuth();
   const view = searchParams.get("view") ?? "all";
-  const [searchQuery, setSearchQuery] = useState("");
+  const { searchQuery, setSearchQuery } = useSearch();
   const [allProjects, setAllProjects] = useState<Project[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -33,12 +34,12 @@ export default function DashboardPage() {
       try {
         setIsLoading(true);
         const token = localStorage.getItem("auth_token");
-        
+
         // 🛡️ [GUARD] Don't fetch for protected views if user is not logged in/token cleared
         if ((view === "owned" || view === "work") && (!token || !isLoggedIn)) {
-           console.log(`🛡️ [FETCH GUARD] Ignoring fetch for "${view}" view because user is not authenticated.`);
-           setIsLoading(false);
-           return;
+          console.log(`🛡️ [FETCH GUARD] Ignoring fetch for "${view}" view because user is not authenticated.`);
+          setIsLoading(false);
+          return;
         }
 
         let endpoint = "/api/projects/with-milestones";
@@ -47,7 +48,7 @@ export default function DashboardPage() {
         } else if (view === "work") {
           endpoint = "/api/projects/me/workspace/with-milestones";
         }
-        
+
         const fetchUrl = buildUrl(endpoint);
         console.log(`🚀 [INIT] Fetching projects for view "${view}" from:`, fetchUrl);
 
@@ -61,7 +62,7 @@ export default function DashboardPage() {
         // Handle 403 Forbidden or 401 Unauthorized (Expired Session)
         if (response.status === 403 || response.status === 401) {
           console.warn(`⚠️ [AUTH] API returned ${response.status} for view: ${view}`);
-          
+
           if (view === "all") {
             if (token) {
               console.log("🔄 [RETRY] Falling back to public fetch for 'all' view...");
@@ -100,7 +101,7 @@ export default function DashboardPage() {
           ownerId: item.project.clientId || "unknown",
           fundingTxnHash: item.project.fundingTxnHash || item.project.funding_txn_hash || null,
         }));
-        
+
         setAllProjects(mappedProjects);
       } catch (error) {
         console.error("Error fetching projects:", error);
@@ -111,6 +112,17 @@ export default function DashboardPage() {
 
     fetchProjects();
   }, [view, isConnected, isLoggedIn]);
+
+  // 🔄 Auto-trigger login when on private views and connected but not logged in
+  useEffect(() => {
+    if ((view === "owned" || view === "work") && isConnected && !isLoggedIn && !authLoading) {
+      console.log("🔄 [PAGE] Auto-triggering login...");
+      const timer = setTimeout(() => {
+        login();
+      }, 500);
+      return () => clearTimeout(timer);
+    }
+  }, [view, isConnected, isLoggedIn, authLoading, login]);
 
   const filteredProjects = useMemo(() => {
     return allProjects.filter((project) => {
@@ -143,8 +155,8 @@ export default function DashboardPage() {
   // 🛡️ [GATE 1] Wallet must be connected for private views
   if ((view === "owned" || view === "work") && !isConnected) {
     return (
-      <ProtectedView 
-        title={view === "owned" ? "My Projects" : "My Workspace"} 
+      <ProtectedView
+        title={view === "owned" ? "My Projects" : "My Workspace"}
         description={`To manage your ${view === "owned" ? "owned" : "active"} projects and secure milestones, please connect your Pera Wallet.`}
       />
     );
@@ -152,34 +164,34 @@ export default function DashboardPage() {
 
   // 🔐 [GATE 2] Session must be active (Signed Message) for private views
   if ((view === "owned" || view === "work") && !isLoggedIn) {
-     return (
-       <div className="flex flex-col items-center justify-center py-20 px-4 text-center bg-white/40 backdrop-blur-xl rounded-[3rem] border border-slate-100 shadow-2xl">
-         <div className="h-24 w-24 rounded-[3rem] bg-indigo-50 flex items-center justify-center text-indigo-500 mb-8 animate-pulse shadow-xl shadow-indigo-100">
-           <RefreshCw className="h-10 w-10" />
-         </div>
-         <h2 className="text-3xl font-black text-slate-900 mb-4 tracking-tight">Authentication Required</h2>
-         <p className="max-w-md text-slate-500 font-bold mb-10 leading-relaxed text-lg">
-           Your wallet is connected, but your session has expired. Please sign a verification message to securely access your data.
-         </p>
-         <button
-           onClick={login}
-           disabled={authLoading}
-           className="group relative px-12 h-16 rounded-2xl bg-indigo-500 text-white font-black text-lg transition-all hover:scale-105 active:scale-95 disabled:opacity-50 disabled:scale-100 shadow-2xl shadow-indigo-200"
-         >
-           {authLoading ? (
-             <span className="flex items-center gap-3">
-               <Loader2 className="h-5 w-5 animate-spin" />
-               Signing...
-             </span>
-           ) : (
-             <span className="flex items-center gap-3">
-               Sign to Authenticate
-               <ArrowRight className="h-5 w-5 group-hover:translate-x-1 transition-transform" />
-             </span>
-           )}
-         </button>
-       </div>
-     );
+    return (
+      <div className="flex flex-col items-center justify-center py-20 px-4 text-center bg-white/40 backdrop-blur-xl rounded-[3rem] border border-slate-100 shadow-2xl">
+        <div className="h-24 w-24 rounded-[3rem] bg-indigo-50 flex items-center justify-center text-indigo-500 mb-8 animate-pulse shadow-xl shadow-indigo-100">
+          <RefreshCw className="h-10 w-10" />
+        </div>
+        <h2 className="text-3xl font-black text-slate-900 mb-4 tracking-tight">Authentication Required</h2>
+        <p className="max-w-md text-slate-500 font-bold mb-10 leading-relaxed text-lg">
+          Your wallet is connected, but your session has expired. Please sign a verification message to securely access your data.
+        </p>
+        <button
+          onClick={login}
+          disabled={authLoading}
+          className="group relative px-12 h-16 rounded-2xl bg-indigo-500 text-white font-black text-lg transition-all hover:scale-105 active:scale-95 disabled:opacity-50 disabled:scale-100 shadow-2xl shadow-indigo-200"
+        >
+          {authLoading ? (
+            <span className="flex items-center gap-3">
+              <Loader2 className="h-5 w-5 animate-spin" />
+              Signing...
+            </span>
+          ) : (
+            <span className="flex items-center gap-3">
+              Sign to Authenticate
+              <ArrowRight className="h-5 w-5 group-hover:translate-x-1 transition-transform" />
+            </span>
+          )}
+        </button>
+      </div>
+    );
   }
 
   return (

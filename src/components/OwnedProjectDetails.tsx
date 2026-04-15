@@ -15,7 +15,7 @@ import { cn } from "@/lib/utils";
 import { DisputeModal } from "./DisputeModal";
 import { useWallet } from "@/context/WalletContext";
 import { buildUrl } from "@/config/api";
-import type { Project, Milestone, MilestoneStatus, Freelancer } from "@/lib/mockData";
+import type { Project, Milestone, MilestoneStatus, Freelancer, DisputeRecord } from "@/lib/mockData";
 
 const GithubIcon = ({ className }: { className?: string }) => (
    <svg className={className} fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
@@ -78,6 +78,7 @@ export function OwnedProjectDetails({ project, onBack }: OwnedProjectDetailsProp
          }
          fetchApplicants();
          fetchSubmissions();
+         fetchDisputes();
       }
    }, [project]);
 
@@ -158,6 +159,69 @@ export function OwnedProjectDetails({ project, onBack }: OwnedProjectDetailsProp
       }
    };
 
+   const fetchDisputes = async () => {
+      if (!project.id) return;
+      try {
+         const token = localStorage.getItem("auth_token");
+         const response = await fetch(buildUrl(`/api/disputes/project/${project.id}`), {
+            headers: {
+               "ngrok-skip-browser-warning": "true",
+               ...(token ? { Authorization: `Bearer ${token}` } : {}),
+            },
+         });
+         if (!response.ok) return;
+         const data: DisputeRecord[] = await response.json();
+         console.log(`✅ [DISPUTES] Loaded ${data.length} dispute(s) for project ${project.id}`);
+         setDisputes(data);
+      } catch (err) {
+         console.error("❌ [DISPUTES ERROR]:", err);
+      }
+   };
+
+   const getDisputeForMilestone = (milestoneId: string): DisputeRecord | undefined => {
+      return disputes.find(d => d.milestoneId === milestoneId);
+   };
+
+   const handleResolveDispute = async (disputeId: string, newStatus: "RESOLVED" | "REJECTED") => {
+      setResolvingDisputeId(disputeId);
+      try {
+         const token = localStorage.getItem("auth_token");
+         const response = await fetch(buildUrl(`/api/disputes/${disputeId}/status`), {
+            method: "PUT",
+            headers: {
+               "Content-Type": "application/json",
+               "ngrok-skip-browser-warning": "true",
+               ...(token ? { Authorization: `Bearer ${token}` } : {}),
+            },
+            body: JSON.stringify({ status: newStatus }),
+         });
+         if (!response.ok) {
+            const errorText = await response.text().catch(() => "Unknown error");
+            throw new Error(`Failed to update dispute: ${errorText}`);
+         }
+         const updated: DisputeRecord = await response.json();
+         // Update disputes list
+         setDisputes(prev => prev.map(d => d.id === disputeId ? updated : d));
+         // Reset milestone status based on resolution
+         if (newStatus === "RESOLVED") {
+            setMilestones(prev =>
+               prev.map(m => m.id === updated.milestoneId ? { ...m, status: "pending" as MilestoneStatus } : m)
+            );
+            addToast("Dispute resolved! Freelancer can now update their submission.", "success");
+         } else {
+            setMilestones(prev =>
+               prev.map(m => m.id === updated.milestoneId ? { ...m, status: "pending" as MilestoneStatus } : m)
+            );
+            addToast("Dispute rejected. Milestone reset to pending.", "info");
+         }
+      } catch (err: any) {
+         console.error("❌ [RESOLVE DISPUTE ERROR]:", err);
+         addToast(err.message || "Failed to update dispute status", "error");
+      } finally {
+         setResolvingDisputeId(null);
+      }
+   };
+
    const fetchApplicants = async () => {
       if (!project.id) return;
 
@@ -206,6 +270,8 @@ export function OwnedProjectDetails({ project, onBack }: OwnedProjectDetailsProp
    // Dispute State
    const [disputingId, setDisputingId] = useState<string | null>(null);
    const [isDisputeModalOpen, setIsDisputeModalOpen] = useState(false);
+   const [disputes, setDisputes] = useState<DisputeRecord[]>([]);
+   const [resolvingDisputeId, setResolvingDisputeId] = useState<string | null>(null);
 
    // Toast State
    const [toasts, setToasts] = useState<{ id: number; message: string; type: "success" | "info" | "error" }[]>([]);
@@ -218,8 +284,13 @@ export function OwnedProjectDetails({ project, onBack }: OwnedProjectDetailsProp
       }, 3000);
    };
 
-   const approvedMilestones = milestones.filter(m => m.status === "approved" || m.status === "completed").length;
-   const progressPercent = Math.round((approvedMilestones / milestones.length) * 100);
+   const completedMilestonesCount = milestones.filter(m => {
+      const s = m.status?.toLowerCase();
+      return s === "completed" || s === "approved" || s === "paid" || !!m.txnHash;
+   }).length;
+   const progressPercent = milestones.length > 0 
+      ? Math.round((completedMilestonesCount / milestones.length) * 100) 
+      : 0;
 
    const handleAssignFreelancer = async (applicant: Applicant) => {
       setAssigningId(applicant.id);
@@ -755,8 +826,19 @@ export function OwnedProjectDetails({ project, onBack }: OwnedProjectDetailsProp
          case "approved": return "bg-emerald-50 text-emerald-600 border-emerald-100 ring-emerald-500/10";
          case "submitted": return "bg-sky-50 text-sky-600 border-sky-100 ring-sky-500/10";
          case "pending": return "bg-slate-50 text-slate-400 border-slate-100 ring-slate-500/10";
-         case "dispute": return "bg-rose-50 text-rose-600 border-rose-100 ring-rose-500/10";
+         case "dispute":
+         case "disputed": return "bg-rose-50 text-rose-600 border-rose-100 ring-rose-100/10";
          default: return "bg-slate-50 text-slate-400";
+      }
+   };
+
+   const getDisputeStatusColor = (status: string) => {
+      switch (status?.toUpperCase()) {
+         case "OPEN": return "bg-orange-50 text-orange-600 border-orange-100";
+         case "UNDER_REVIEW": return "bg-amber-50 text-amber-600 border-amber-100";
+         case "RESOLVED": return "bg-emerald-50 text-emerald-600 border-emerald-100";
+         case "REJECTED": return "bg-slate-50 text-slate-500 border-slate-100";
+         default: return "bg-rose-50 text-rose-500 border-rose-100";
       }
    };
 
@@ -799,7 +881,7 @@ export function OwnedProjectDetails({ project, onBack }: OwnedProjectDetailsProp
             variants={containerVariants}
             initial={false}
             animate="show"
-            className="mx-auto max-w-5xl space-y-8 pb-20 px-4"
+            className="mx-auto max-w-5xl space-y-6 md:space-y-8 pb-20 px-4 md:px-0"
          >
             <motion.button
                variants={itemVariants}
@@ -813,9 +895,9 @@ export function OwnedProjectDetails({ project, onBack }: OwnedProjectDetailsProp
             </motion.button>
 
             {/* HEADER SECTION */}
-            <motion.div variants={itemVariants} className="relative rounded-[3rem] bg-white p-1 shadow-2xl shadow-slate-200/50 overflow-hidden group">
+            <motion.div variants={itemVariants} className="relative rounded-3xl md:rounded-[3rem] bg-white p-1 shadow-2xl shadow-slate-200/50 overflow-hidden group">
                <div className="absolute inset-0 bg-gradient-to-r from-indigo-400 via-sky-400 to-emerald-400 opacity-20" />
-               <div className="relative rounded-[2.8rem] bg-white p-8 md:p-12 overflow-hidden">
+               <div className="relative rounded-[1.4rem] md:rounded-[2.8rem] bg-white p-6 md:p-12 overflow-hidden">
                   <div className="relative z-10 space-y-8">
                      <div className="flex flex-col md:flex-row md:items-start justify-between gap-6">
                         <div className="space-y-4">
@@ -835,13 +917,13 @@ export function OwnedProjectDetails({ project, onBack }: OwnedProjectDetailsProp
                                  {assignedFreelancer ? "Assigned" : "Open for Applications"}
                               </span>
                            </div>
-                           <h1 className="text-4xl md:text-5xl font-black tracking-tight text-slate-950 leading-tight">
+                           <h1 className="text-2xl md:text-5xl font-black tracking-tight text-slate-950 leading-tight">
                               {project.title}
                            </h1>
                         </div>
-                        <div className="flex flex-col items-end gap-2 bg-slate-50 border border-slate-100 p-6 rounded-[2rem] min-w-[180px] shadow-sm">
+                        <div className="flex flex-col items-start md:items-end gap-2 bg-slate-50 border border-slate-100 p-4 md:p-6 rounded-2xl md:rounded-[2rem] w-full md:min-w-[180px] shadow-sm">
                            <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Total Budget</span>
-                           <span className="text-3xl font-black text-emerald-600">
+                           <span className="text-2xl md:text-3xl font-black text-emerald-600">
                               {typeof project.budget === 'number' ? `${project.budget.toLocaleString()} ALGO` : project.budget}
                            </span>
                         </div>
@@ -851,7 +933,7 @@ export function OwnedProjectDetails({ project, onBack }: OwnedProjectDetailsProp
                      <div className="space-y-3">
                         <div className="flex justify-between items-end">
                            <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Milestone Progress</p>
-                           <p className="text-sm font-black text-slate-900">{approvedMilestones} of {milestones.length} Completed</p>
+                           <p className="text-sm font-black text-slate-900">{completedMilestonesCount} of {milestones.length} Completed</p>
                         </div>
                         <div className="h-4 w-full bg-slate-100 rounded-full overflow-hidden p-1">
                            <motion.div
@@ -868,11 +950,11 @@ export function OwnedProjectDetails({ project, onBack }: OwnedProjectDetailsProp
             </motion.div>
 
             {/* Navigation Tabs */}
-            <div className="flex gap-2 p-1.5 bg-slate-100/50 rounded-3xl w-fit">
+            <div className="flex flex-wrap gap-2 p-1.5 bg-slate-100/50 rounded-2xl md:rounded-3xl w-full md:w-fit">
                <button
                   onClick={() => setActiveTab("overview")}
                   className={cn(
-                     "px-8 h-12 rounded-2xl text-xs font-black uppercase tracking-widest transition-all",
+                     "flex-1 md:flex-none px-4 md:px-8 h-10 md:h-12 rounded-xl md:rounded-2xl text-[10px] md:text-xs font-black uppercase tracking-widest transition-all",
                      activeTab === "overview" ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-700"
                   )}
                >
@@ -881,7 +963,7 @@ export function OwnedProjectDetails({ project, onBack }: OwnedProjectDetailsProp
                <button
                   onClick={() => setActiveTab("milestones")}
                   className={cn(
-                     "px-8 h-12 rounded-2xl text-xs font-black uppercase tracking-widest transition-all",
+                     "flex-1 md:flex-none px-4 md:px-8 h-10 md:h-12 rounded-xl md:rounded-2xl text-[10px] md:text-xs font-black uppercase tracking-widest transition-all",
                      activeTab === "milestones" ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-700"
                   )}
                >
@@ -890,7 +972,7 @@ export function OwnedProjectDetails({ project, onBack }: OwnedProjectDetailsProp
                <button
                   onClick={() => setActiveTab("applicants")}
                   className={cn(
-                     "px-8 h-12 rounded-2xl text-xs font-black uppercase tracking-widest transition-all",
+                     "flex-1 md:flex-none px-4 md:px-8 h-10 md:h-12 rounded-xl md:rounded-2xl text-[10px] md:text-xs font-black uppercase tracking-widest transition-all",
                      activeTab === "applicants" ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-700"
                   )}
                >
@@ -910,9 +992,9 @@ export function OwnedProjectDetails({ project, onBack }: OwnedProjectDetailsProp
                         exit={{ opacity: 0, y: -10 }}
                         className="space-y-8"
                      >
-                        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 md:gap-8">
                            <div className="lg:col-span-2 space-y-6">
-                              <div className="rounded-3xl border border-slate-100 bg-white p-8 shadow-sm space-y-6">
+                              <div className="rounded-[1.5rem] md:rounded-3xl border border-slate-100 bg-white p-6 md:p-8 shadow-sm space-y-6">
                                  <h3 className="text-xl font-black text-slate-900">Project Description</h3>
                                  <p className="text-slate-600 leading-relaxed font-medium">{project.description}</p>
 
@@ -935,7 +1017,7 @@ export function OwnedProjectDetails({ project, onBack }: OwnedProjectDetailsProp
                            </div>
 
                            <div className="space-y-6">
-                              <div className="rounded-3xl border border-slate-100 bg-white p-6 shadow-sm">
+                              <div className="rounded-2xl md:rounded-3xl border border-slate-100 bg-white p-5 md:p-6 shadow-sm">
                                  <h3 className="text-sm font-black uppercase tracking-widest text-slate-400 mb-6">Execution Detail</h3>
                                  <div className="space-y-4">
                                     <div className="flex justify-between items-center p-4 bg-slate-50 rounded-2xl">
@@ -950,7 +1032,7 @@ export function OwnedProjectDetails({ project, onBack }: OwnedProjectDetailsProp
                               </div>
 
                               <div className={cn(
-                                 "relative overflow-hidden rounded-[2.5rem] border border-slate-100 p-8 transition-all hover:bg-white hover:shadow-2xl hover:shadow-slate-200/50",
+                                 "relative overflow-hidden rounded-3xl md:rounded-[2.5rem] border border-slate-100 p-6 md:p-8 transition-all hover:bg-white hover:shadow-2xl hover:shadow-slate-200/50",
                                  !assignedFreelancer ? "bg-slate-50/50 border-dashed" : "bg-white"
                               )}>
                                  {assignedFreelancer ? (
@@ -1040,18 +1122,18 @@ export function OwnedProjectDetails({ project, onBack }: OwnedProjectDetailsProp
                         ) : (
                            /* ─── FUNDED: Show Milestones ─── */
                            <>
-                              <div className="flex items-center justify-between px-2">
-                                 <h2 className="text-2xl font-black text-slate-900 uppercase flex items-center gap-3">
-                                    <Activity className="h-6 w-6 text-indigo-500" /> Milestone Execution Roadmap
+                              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 px-2">
+                                 <h2 className="text-xl md:text-2xl font-black text-slate-900 uppercase flex items-center gap-3">
+                                    <Activity className="h-5 w-5 md:h-6 md:w-6 text-indigo-500" /> Milestone Execution Roadmap
                                  </h2>
-                                 <span className="text-xs font-bold text-slate-400 bg-white px-4 py-2 rounded-full border border-slate-100">
+                                 <span className="w-fit text-[10px] md:text-xs font-bold text-slate-400 bg-white px-4 py-2 rounded-full border border-slate-100">
                                     {milestones.length} Strategic Nodes
                                  </span>
                               </div>
 
                               <div className="relative space-y-12">
                                  {/* Timeline vertical line */}
-                                 <div className="absolute left-10 top-0 bottom-0 w-1 bg-slate-100 rounded-full" />
+                                 <div className="absolute left-[18px] md:left-10 top-0 bottom-0 w-1 bg-slate-100 rounded-full" />
 
                                  {milestones.map((m, i) => (
                                     <motion.div
@@ -1059,20 +1141,84 @@ export function OwnedProjectDetails({ project, onBack }: OwnedProjectDetailsProp
                                        initial={false}
                                        animate={{ opacity: 1, x: 0 }}
                                        transition={{ delay: i * 0.1 }}
-                                       className="relative pl-24 group"
+                                       className="relative pl-12 md:pl-24 group"
                                     >
                                        {/* Node Indicator */}
                                        <div className={cn(
-                                          "absolute left-8 h-5 w-5 rounded-full border-4 border-white shadow-xl z-20 transition-all duration-500 top-10",
+                                          "absolute left-[13px] md:left-8 h-3.5 w-3.5 md:h-5 md:w-5 rounded-full border-[3px] md:border-4 border-white shadow-xl z-20 transition-all duration-500 top-10",
                                           m.status === 'completed' || m.status === 'approved' ? "bg-emerald-500 shadow-emerald-200" :
-                                             m.status === 'submitted' ? "bg-sky-500 shadow-sky-200 animate-pulse" : "bg-slate-300"
+                                             m.status === 'submitted' ? "bg-sky-500 shadow-sky-200 animate-pulse" :
+                                             (m.status?.toLowerCase() === 'disputed' || m.status?.toLowerCase() === 'dispute') ? "bg-rose-500 shadow-rose-200 animate-pulse" : "bg-slate-300"
                                        )} />
 
                                        <div className={cn(
-                                          "group relative overflow-hidden rounded-[2.5rem] border bg-white p-8 md:p-10 transition-all hover:shadow-2xl hover:shadow-indigo-500/5",
+                                          "group relative overflow-hidden rounded-3xl md:rounded-[2.5rem] border bg-white p-5 md:p-10 transition-all hover:shadow-2xl hover:shadow-indigo-500/5",
+                                          (m.status?.toLowerCase() === 'disputed' || m.status?.toLowerCase() === 'dispute') ? "border-rose-200 shadow-rose-50/50" :
                                           m.status === 'submitted' ? "border-sky-100 bg-sky-50/10" : "border-slate-100"
                                        )}>
-                                          <div className="flex flex-col xl:flex-row xl:items-start justify-between gap-8">
+                                          {/* Dispute Panel inline */}
+                                          {(() => {
+                                             const dispute = getDisputeForMilestone(m.id);
+                                             if (!dispute) return null;
+                                             const isActive = dispute.status !== "RESOLVED" && dispute.status !== "REJECTED";
+                                             return (
+                                                <motion.div
+                                                   initial={{ opacity: 0, height: 0 }}
+                                                   animate={{ opacity: 1, height: "auto" }}
+                                                   className="mb-8 rounded-2xl overflow-hidden border border-rose-200 relative z-50 shadow-sm"
+                                                >
+                                                   <div className="flex items-center gap-3 px-5 py-3 bg-rose-500 text-white">
+                                                      <AlertCircle className="h-4 w-4" />
+                                                      <span className="text-[10px] font-black uppercase tracking-widest">Active Dispute Panel</span>
+                                                      <span className={cn(
+                                                         "ml-auto px-3 py-1 rounded-full text-[8px] font-black uppercase tracking-widest border",
+                                                         getDisputeStatusColor(dispute.status)
+                                                      )}>
+                                                         {dispute.status?.replace(/_/g, " ")}
+                                                      </span>
+                                                   </div>
+                                                   <div className="p-6 bg-rose-50/40 space-y-5">
+                                                      <div>
+                                                         <p className="text-[10px] font-black uppercase tracking-widest text-rose-400 mb-2">Dispute Reason</p>
+                                                         <p className="text-sm font-bold text-rose-900 italic bg-white/80 p-4 rounded-xl border border-rose-100 shadow-inner">
+                                                            "{dispute.reason}"
+                                                         </p>
+                                                      </div>
+                                                      {isActive && (
+                                                         <div className="flex flex-col sm:flex-row gap-3 pt-2">
+                                                            <button
+                                                               onClick={() => handleResolveDispute(dispute.id, "RESOLVED")}
+                                                               disabled={resolvingDisputeId === dispute.id}
+                                                               className="flex-1 h-12 rounded-xl bg-emerald-500 text-white text-[10px] font-black uppercase tracking-widest hover:bg-emerald-600 hover:shadow-lg hover:shadow-emerald-200 transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+                                                            >
+                                                               {resolvingDisputeId === dispute.id ? (
+                                                                  <><Loader2 className="h-4 w-4 animate-spin" /> BROADCASTING...</>
+                                                               ) : (
+                                                                  <><CheckCircle2 className="h-4 w-4" /> Mark as Resolved</>
+                                                               )}
+                                                            </button>
+                                                            <button
+                                                               onClick={() => handleResolveDispute(dispute.id, "REJECTED")}
+                                                               disabled={resolvingDisputeId === dispute.id}
+                                                               className="flex-1 h-12 rounded-xl bg-white border border-rose-200 text-rose-600 text-[10px] font-black uppercase tracking-widest hover:bg-rose-50 transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+                                                            >
+                                                               <RotateCcw className="h-4 w-4" /> Reset Phase
+                                                            </button>
+                                                         </div>
+                                                      )}
+                                                      {dispute.status === "RESOLVED" && (
+                                                         <div className="flex items-center gap-3 text-emerald-600 text-xs font-black bg-emerald-50/50 p-4 rounded-xl border border-emerald-100">
+                                                            <div className="h-8 w-8 rounded-full bg-emerald-100 flex items-center justify-center">
+                                                               <CheckCircle2 className="h-4 w-4" />
+                                                            </div>
+                                                            Dispute Resolved. Stakeholders can now proceed with the next actions.
+                                                         </div>
+                                                      )}
+                                                   </div>
+                                                </motion.div>
+                                             );
+                                          })()}
+                                          <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-6 md:gap-8">
                                              <div className="space-y-4 flex-1">
                                                 <div className="flex items-center gap-3">
                                                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Phase 0{i + 1}</span>
@@ -1124,16 +1270,16 @@ export function OwnedProjectDetails({ project, onBack }: OwnedProjectDetailsProp
 
                                                          {m.status?.toLowerCase() === "submitted" && !aiFeedback[m.id] && (
                                                             <div className="relative overflow-hidden flex items-center gap-3 px-6 py-3 rounded-2xl bg-amber-50 text-amber-600 border border-amber-100 text-[10px] font-black uppercase tracking-widest shadow-sm shadow-amber-500/5 group/review">
-                                                               <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/40 to-transparent -translate-x-full group-hover:animate-[shimmer_1.5s_infinite]" style={{ animationDuration: '2s' }} />
-                                                               <Activity className="h-4 w-4 animate-pulse" />
+                                                               <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/40 to-transparent -translate-x-full group-hover:animate-[shimmer_1.5s_infinite]" />
+                                                               <Activity className="h-3 w-3 md:h-4 md:w-4 animate-pulse" />
                                                                Awaiting Review
                                                             </div>
                                                          )}
                                                       </div>
-
+ 
                                                       {/* Freelancer Submission Notes */}
                                                       {m.submissionNotes && (
-                                                         <div className="relative p-6 rounded-[2.5rem] bg-slate-50/50 border border-slate-100 shadow-inner group/notes overflow-hidden">
+                                                         <div className="relative p-5 md:p-6 rounded-[1.5rem] md:rounded-[2.5rem] bg-slate-50/50 border border-slate-100 shadow-inner group/notes overflow-hidden">
                                                             <div className="absolute top-0 left-0 w-1.5 h-full bg-indigo-500/20 group-hover/notes:bg-indigo-500 transition-colors" />
                                                             <div className="flex items-center gap-3 mb-3">
                                                                <div className="h-6 w-6 rounded-lg bg-white border border-slate-200 flex items-center justify-center shadow-sm">
@@ -1178,8 +1324,8 @@ export function OwnedProjectDetails({ project, onBack }: OwnedProjectDetailsProp
                                                 )}
                                              </div>
 
-                                             <div className="flex flex-col items-end gap-3 min-w-[240px] xl:border-l xl:border-slate-100 xl:pl-8">
-                                                <div className="text-right w-full bg-slate-50/50 p-6 rounded-3xl border border-slate-100 flex flex-col items-end gap-1">
+                                             <div className="flex flex-col items-start md:items-end gap-3 w-full lg:min-w-[240px] lg:border-l lg:border-slate-100 lg:pl-8">
+                                                <div className="text-left md:text-right w-full bg-slate-50/50 p-5 md:p-6 rounded-2xl md:rounded-3xl border border-slate-100 flex flex-col items-start md:items-end gap-1">
                                                    <span className="text-[10px] font-black uppercase tracking-widest text-slate-400 block pb-1">Milestone Value</span>
                                                    <span className="text-3xl font-black text-slate-950">
                                                       {typeof m.amount === 'number' ? `${m.amount.toLocaleString()} ALGO` : m.amount}
@@ -1191,70 +1337,89 @@ export function OwnedProjectDetails({ project, onBack }: OwnedProjectDetailsProp
                                                    )}
                                                 </div>
 
-                                                {(m.status?.toLowerCase() === "submitted" || !!m.githubLink) && (
-                                                   <div className="w-full space-y-3 pt-2">
-                                                      {/* Always show Release Payment button if submitted/has link */}
-                                                      <button
-                                                         onClick={() => handleApproveMilestone(m.id)}
-                                                         disabled={releasingMilestoneId !== null}
-                                                         className={cn(
-                                                            "w-full h-14 rounded-2xl text-white text-xs font-black uppercase tracking-widest hover:scale-[1.02] active:scale-95 transition-all shadow-xl flex items-center justify-center gap-3 disabled:opacity-50",
-                                                            (!aiFeedback[m.id] || aiFeedback[m.id].approved) ? "bg-emerald-500 shadow-emerald-200" : "bg-slate-900 shadow-slate-200"
-                                                         )}
-                                                      >
-                                                         {releasingMilestoneId === m.id ? (
-                                                            <><Loader2 className="h-5 w-5 animate-spin" /> Releasing...</>
-                                                         ) : (
-                                                            <><CheckCircle2 className="h-5 w-5" /> Release Payment</>
-                                                         )}
-                                                      </button>
+                                                {(() => {
+                                                   const dispute = getDisputeForMilestone(m.id);
+                                                   const hasActiveDispute = dispute && dispute.status !== "RESOLVED" && dispute.status !== "REJECTED";
+                                                   const isSubmitted = m.status?.toLowerCase() === "submitted" || !!m.githubLink;
 
-                                                      {!aiFeedback[m.id] ? (
-                                                         <div className="grid grid-cols-1 gap-2">
-                                                            <button
-                                                               onClick={() => handleAIEvaluation(m.id)}
-                                                               disabled={evaluatingId === m.id}
-                                                               className="w-full h-14 rounded-2xl bg-slate-900 text-white text-[10px] font-black uppercase tracking-widest hover:scale-[1.02] active:scale-95 transition-all shadow-xl flex items-center justify-center gap-2 disabled:opacity-50"
-                                                            >
-                                                               {evaluatingId === m.id ? (
-                                                                  <><Loader2 className="w-4 h-4 animate-spin" /> {getEvaluationMessage()}</>
-                                                               ) : (
-                                                                  <><Sparkles className="w-4 h-4 text-amber-400" /> Evaluate with AI</>
+                                                   // We allow buttons even if there's an active dispute so the client can approve/evaluate re-submissions
+                                                   return (
+                                                      <div className="w-full space-y-3 pt-2">
+                                                         {isSubmitted && (
+                                                            <>
+                                                               {/* Approval / Payment Release Action */}
+                                                               {!m.txnHash && (
+                                                                  <button
+                                                                     onClick={() => handleApproveMilestone(m.id)}
+                                                                     disabled={releasingMilestoneId !== null}
+                                                                     className={cn(
+                                                                        "w-full h-14 rounded-2xl text-white text-xs font-black uppercase tracking-widest hover:scale-[1.02] active:scale-95 transition-all shadow-xl flex items-center justify-center gap-3 disabled:opacity-50",
+                                                                        (!aiFeedback[m.id] || aiFeedback[m.id].approved) ? "bg-emerald-500 shadow-emerald-200" : "bg-slate-900 shadow-slate-200"
+                                                                     )}
+                                                                  >
+                                                                     {releasingMilestoneId === m.id ? (
+                                                                        <><Loader2 className="h-5 w-5 animate-spin" /> Releasing...</>
+                                                                     ) : (
+                                                                        <><CheckCircle2 className="h-5 w-5" /> Release Payment</>
+                                                                     )}
+                                                                  </button>
                                                                )}
+
+                                                               {/* AI Evaluation Action */}
+                                                               {!aiFeedback[m.id] ? (
+                                                                  <div className="grid grid-cols-1 gap-2">
+                                                                     <button
+                                                                        onClick={() => handleAIEvaluation(m.id)}
+                                                                        disabled={evaluatingId === m.id}
+                                                                        className="w-full h-14 rounded-2xl bg-slate-900 text-white text-[10px] font-black uppercase tracking-widest hover:scale-[1.02] active:scale-95 transition-all shadow-xl flex items-center justify-center gap-2 disabled:opacity-50"
+                                                                     >
+                                                                        {evaluatingId === m.id ? (
+                                                                           <><Loader2 className="w-4 h-4 animate-spin" /> {getEvaluationMessage()}</>
+                                                                        ) : (
+                                                                           <><Sparkles className="w-4 h-4 text-amber-400" /> Evaluate with AI</>
+                                                                        )}
+                                                                     </button>
+                                                                  </div>
+                                                               ) : (
+                                                                  <div className={cn(
+                                                                     "p-4 rounded-2xl flex items-center justify-between",
+                                                                     aiFeedback[m.id].approved
+                                                                        ? "bg-emerald-50 border border-emerald-100"
+                                                                        : "bg-rose-50 border border-rose-100"
+                                                                  )}>
+                                                                     <span className={cn(
+                                                                        "text-[10px] font-black uppercase tracking-widest",
+                                                                        aiFeedback[m.id].approved ? "text-emerald-600" : "text-rose-600"
+                                                                     )}>
+                                                                        {aiFeedback[m.id].approved ? "AI Approved" : "AI Rejected"} — Score
+                                                                     </span>
+                                                                     <span className={cn(
+                                                                        "text-xl font-black",
+                                                                        aiFeedback[m.id].approved ? "text-emerald-700" : "text-rose-700"
+                                                                     )}>
+                                                                        {aiFeedback[m.id].score}%
+                                                                     </span>
+                                                                  </div>
+                                                               )}
+                                                            </>
+                                                         )}
+
+                                                         {/* Raise Dispute (Always available if not already completed/TX hashed, and even if not submitted) */}
+                                                         {!m.txnHash && m.status?.toLowerCase() !== "completed" && m.status?.toLowerCase() !== "approved" && (
+                                                            <button
+                                                               onClick={() => handleDisputeClick(m.id)}
+                                                               className="w-full h-12 rounded-2xl bg-white border border-rose-200 text-rose-500 text-[10px] font-black uppercase tracking-widest hover:bg-rose-50 transition-all flex items-center justify-center gap-2 shadow-sm"
+                                                            >
+                                                               <AlertCircle className="h-4 w-4" /> Raise Dispute
                                                             </button>
-                                                         </div>
-                                                      ) : (
-                                                         <div className={cn(
-                                                            "p-4 rounded-2xl flex items-center justify-between",
-                                                            aiFeedback[m.id].approved
-                                                               ? "bg-emerald-50 border border-emerald-100"
-                                                               : "bg-rose-50 border border-rose-100"
-                                                         )}>
-                                                            <span className={cn(
-                                                               "text-[10px] font-black uppercase tracking-widest",
-                                                               aiFeedback[m.id].approved ? "text-emerald-600" : "text-rose-600"
-                                                            )}>
-                                                               {aiFeedback[m.id].approved ? "AI Approved" : "AI Rejected"} — Score
-                                                            </span>
-                                                            <span className={cn(
-                                                               "text-xl font-black",
-                                                               aiFeedback[m.id].approved ? "text-emerald-700" : "text-rose-700"
-                                                            )}>
-                                                               {aiFeedback[m.id].score}%
-                                                            </span>
-                                                         </div>
-                                                      )}
+                                                         )}
+                                                      </div>
+                                                   );
+                                                })()}
 
-                                                      <button
-                                                         onClick={() => handleDisputeClick(m.id)}
-                                                         className="w-full h-12 rounded-2xl bg-white border border-rose-200 text-rose-500 text-[10px] font-black uppercase tracking-widest hover:bg-rose-50 transition-all flex items-center justify-center gap-2"
-                                                      >
-                                                         <AlertCircle className="h-4 w-4" /> Raise Dispute
-                                                      </button>
-                                                   </div>
-                                                )}
 
-                                                {m.status?.toLowerCase() === "approved" && (
+
+                                                {m.status?.toLowerCase() === "approved" && !m.txnHash && (
                                                    <div className="w-full pt-2">
                                                       <button
                                                          onClick={() => handleReleasePayment(m.id)}
@@ -1270,7 +1435,7 @@ export function OwnedProjectDetails({ project, onBack }: OwnedProjectDetailsProp
                                                    </div>
                                                 )}
 
-                                                {m.status?.toLowerCase() === "completed" && (
+                                                {(m.status?.toLowerCase() === "completed" || !!m.txnHash) && (
                                                    <div className="w-full pt-2 flex items-center justify-center gap-3 h-16 bg-emerald-50 text-emerald-600 rounded-[2rem] text-xs font-black uppercase tracking-widest border border-emerald-100">
                                                       <div className="h-8 w-8 rounded-full bg-emerald-100 flex items-center justify-center">
                                                          <CheckCircle2 className="h-5 w-5" />
@@ -1314,9 +1479,9 @@ export function OwnedProjectDetails({ project, onBack }: OwnedProjectDetailsProp
                               </div>
                            </div>
                         ) : (
-                           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
                               {applicants.map((app) => (
-                                 <div key={app.id} className="rounded-3xl border border-slate-100 bg-white p-6 shadow-sm hover:shadow-xl transition-all group flex flex-col justify-between">
+                                 <div key={app.id} className="rounded-2xl md:rounded-3xl border border-slate-100 bg-white p-5 md:p-6 shadow-sm hover:shadow-xl transition-all group flex flex-col justify-between">
                                     <div className="space-y-6">
                                        <div className="flex items-start justify-between">
                                           <div className="flex gap-4 items-center">
@@ -1329,7 +1494,7 @@ export function OwnedProjectDetails({ project, onBack }: OwnedProjectDetailsProp
                                              {app.status || "Applied"}
                                           </span>
                                        </div>
-                                       <div className="grid grid-cols-2 gap-3 p-4 rounded-xl bg-slate-50 border border-slate-100">
+                                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-4 rounded-xl bg-slate-50 border border-slate-100">
                                           <div className="flex items-center gap-2 text-xs font-bold text-slate-600 truncate">
                                              <Mail className="h-3 w-3 text-slate-400 shrink-0" /> <span className="truncate">{app.email}</span>
                                           </div>
@@ -1375,7 +1540,7 @@ export function OwnedProjectDetails({ project, onBack }: OwnedProjectDetailsProp
                                              )}
                                           </button>
                                        ) : (
-                                          <div className="w-full h-12 rounded-xl bg-slate-50 border border-slate-100 flex items-center justify-center text-[10px] font-black uppercase tracking-widest text-slate-400">
+                                          <div className="w-full h-12 rounded-lg md:rounded-xl bg-slate-50 border border-slate-100 flex items-center justify-center text-[10px] font-black uppercase tracking-widest text-slate-400">
                                              {app.status || "Applied"}
                                           </div>
                                        )}

@@ -32,12 +32,12 @@ export function Navbar() {
 
         {/* Logo */}
         <a href="/" className="flex flex-shrink-0 items-center gap-3 group cursor-pointer lg:hover:scale-105 transition-transform duration-300">
-          <div className="relative flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br from-cyan-400 to-sky-600 text-white shadow-xl shadow-sky-500/40 overflow-hidden ring-1 ring-sky-300">
+          <div className="relative flex h-9 w-9 sm:h-11 sm:w-11 items-center justify-center rounded-xl bg-gradient-to-br from-cyan-400 to-sky-600 text-white shadow-xl shadow-sky-500/40 overflow-hidden ring-1 ring-sky-300">
             <div className="absolute inset-0 bg-white/30 opacity-0 group-hover:opacity-100 transition-opacity" />
-            <Hexagon className="h-6 w-6 relative z-10 drop-shadow-md" />
-            <Sparkle className="absolute top-1 right-1 h-3 w-3 text-white/90 animate-pulse drop-shadow-md" />
+            <Hexagon className="h-5 w-5 sm:h-6 sm:w-6 relative z-10 drop-shadow-md" />
+            <Sparkle className="absolute top-0.5 right-0.5 sm:top-1 sm:right-1 h-2.5 w-2.5 sm:h-3 sm:w-3 text-white/90 animate-pulse drop-shadow-md" />
           </div>
-          <span className="text-xl font-extrabold tracking-tight text-slate-900 drop-shadow-sm">
+          <span className="text-lg sm:text-xl font-extrabold tracking-tight text-slate-900 drop-shadow-sm">
             Freelance<span className="text-transparent bg-clip-text bg-gradient-to-r from-cyan-500 to-sky-600">AI</span>
           </span>
         </a>

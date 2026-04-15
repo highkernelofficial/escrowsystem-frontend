@@ -14,17 +14,17 @@ interface WalletButtonProps {
   className?: string;
 }
 
-export function WalletButton({ 
-  isConnected, 
-  isLoading, 
-  walletAddress, 
-  onConnect, 
+export function WalletButton({
+  isConnected,
+  isLoading,
+  walletAddress,
+  onConnect,
   onLogout,
-  className 
+  className
 }: WalletButtonProps) {
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
-  
+
   const shortAddress = walletAddress ? `${walletAddress.slice(0, 5)}...${walletAddress.slice(-4)}` : "";
 
   // Close dropdown when clicking outside
@@ -66,7 +66,7 @@ export function WalletButton({
         {!isConnected && !isLoading && (
           <span className="absolute inset-0 w-full h-full bg-white/25 origin-left -scale-x-100 group-hover:scale-x-100 transition-transform duration-500 ease-out" />
         )}
-        
+
         {isLoading ? (
           <>
             <Loader2 className="h-4 w-4 animate-spin relative z-10" />

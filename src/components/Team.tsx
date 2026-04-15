@@ -133,7 +133,7 @@ export function Team() {
               key={member.name}
               variants={cardVariant}
               style={{ perspective: 1200 }}
-              className={`group flex flex-col items-center rounded-[2.5rem] border border-white/50 ring-2 ${member.ring} ring-opacity-50 bg-white/90 backdrop-blur-3xl p-8 lg:px-6 xl:px-8 transition-all duration-700 hover:-translate-y-4 shadow-[0_15px_40px_rgba(0,0,0,0.06),_0_0_30px_rgba(255,255,255,0.8)_inset] ${member.shadow} relative overflow-hidden`}
+              className={`group flex flex-col items-center rounded-[2.5rem] border border-white/50 ring-2 ${member.ring} ring-opacity-50 bg-white/90 backdrop-blur-3xl p-6 sm:p-8 lg:px-6 xl:px-8 transition-all duration-700 hover:-translate-y-4 shadow-[0_15px_40px_rgba(0,0,0,0.06),_0_0_30px_rgba(255,255,255,0.8)_inset] ${member.shadow} relative overflow-hidden`}
             >
                {/* Background Glow on Hover */}
               <div className={`absolute top-0 left-0 w-full h-2 bg-gradient-to-r ${member.gradient} opacity-0 group-hover:opacity-100 transition-opacity duration-500`} />

@@ -82,6 +82,7 @@ export default function MyWorkDetailPage() {
             amount: `${m.amount} ALGO`,
             status: (m.status?.toLowerCase() as any) || "pending",
             percentage: m.percentage,
+            txnHash: m.txnHash,
             githubLink: "" // Will be handled during submission
           }))
         };

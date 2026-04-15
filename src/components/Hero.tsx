@@ -22,7 +22,7 @@ export function Hero() {
   };
 
   return (
-    <section id="home" className="relative overflow-hidden bg-white pt-32 pb-20 lg:pt-48 lg:pb-32">
+    <section id="home" className="relative overflow-hidden bg-white pt-24 pb-16 lg:pt-32 lg:pb-24">
       {/* Animated Pastel Background Blobs - Light Blue Enhanced */}
       <motion.div
         animate={{
@@ -86,9 +86,9 @@ export function Hero() {
             <motion.div variants={itemVariants} className="mt-10 flex flex-wrap gap-5 justify-center lg:justify-start items-center">
               <a
                 href="/dashboard"
-                className="group relative inline-flex h-14 items-center justify-center overflow-hidden rounded-full bg-white/80 backdrop-blur-xl border border-sky-200 px-8 font-bold text-slate-700 transition-all hover:scale-105 hover:border-sky-300 shadow-[0_10px_25px_rgba(0,0,0,0.05)] hover:shadow-[0_15px_35px_rgba(14,165,233,0.2)] active:scale-95"
+                className="group relative inline-flex h-14 items-center justify-center overflow-hidden rounded-full bg-gradient-to-r from-sky-500 to-indigo-600 px-10 font-black text-white transition-all hover:scale-105 shadow-[0_10px_30px_rgba(14,165,233,0.4)] hover:shadow-[0_15px_40px_rgba(14,165,233,0.6)] active:scale-95"
               >
-                <span className="relative flex items-center drop-shadow-sm">
+                <span className="relative flex items-center drop-shadow-md">
                   Explore Projects
                   <ArrowRight className="ml-2 h-5 w-5 transition-transform group-hover:translate-x-1" />
                 </span>
