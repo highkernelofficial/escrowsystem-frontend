@@ -38,7 +38,7 @@ export function Navbar() {
             <Sparkle className="absolute top-0.5 right-0.5 sm:top-1 sm:right-1 h-2.5 w-2.5 sm:h-3 sm:w-3 text-white/90 animate-pulse drop-shadow-md" />
           </div>
           <span className="text-lg sm:text-xl font-extrabold tracking-tight text-slate-900 drop-shadow-sm">
-            Freelance<span className="text-transparent bg-clip-text bg-gradient-to-r from-cyan-500 to-sky-600">AI</span>
+            FRESCROW
           </span>
         </a>
 

@@ -58,7 +58,7 @@ export function DashboardSidebar({ isOpen, onClose }: DashboardSidebarProps) {
             <Sparkle className="absolute top-1 right-1 h-2.5 w-2.5 text-white/70 animate-pulse" />
           </div>
           <span className="text-xl font-extrabold tracking-tight text-slate-900">
-            Freelance<span className="text-transparent bg-clip-text bg-gradient-to-r from-cyan-500 to-sky-600">AI</span>
+            FRESCROW
           </span>
         </div>
         

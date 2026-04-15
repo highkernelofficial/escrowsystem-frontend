@@ -11,7 +11,7 @@ export function Footer() {
             <Hexagon className="h-6 w-6 relative z-10" />
           </div>
           <span className="text-xl font-extrabold tracking-tight text-slate-900 group-hover:drop-shadow-sm transition-all">
-            Freelance<span className="text-transparent bg-clip-text bg-gradient-to-r from-cyan-500 to-sky-600">AI</span>
+            FRESCROW
           </span>
         </div>
 
@@ -24,7 +24,7 @@ export function Footer() {
 
         {/* Copyright */}
         <p className="text-sm text-slate-400">
-          © {new Date().getFullYear()} FreelanceAI. All rights reserved.
+          © {new Date().getFullYear()} FRESCROW. All rights reserved.
         </p>
       </div>
     </footer>
